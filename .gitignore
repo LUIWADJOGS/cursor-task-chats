@@ -1,0 +1,14 @@
+node_modules/
+out/
+*.vsix
+*.log
+*.tmp
+
+.DS_Store
+Thumbs.db
+
+.vscode/
+.vscode-test/
+
+# Внутренняя документация — не пушить в публичный репозиторий
+docs/

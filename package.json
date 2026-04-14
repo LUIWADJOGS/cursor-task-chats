@@ -1,0 +1,278 @@
+{
+  "name": "cursor-task-chats",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.1.0",
+  "publisher": "LUIWADJOGS",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LUIWADJOGS/cursor-task-chats.git"
+  },
+  "homepage": "https://github.com/LUIWADJOGS/cursor-task-chats#readme",
+  "bugs": {
+    "url": "https://github.com/LUIWADJOGS/cursor-task-chats/issues"
+  },
+  "keywords": [
+    "cursor",
+    "cursor-ai",
+    "cursor-chat",
+    "chat",
+    "tasks",
+    "task-manager",
+    "git",
+    "git-branch",
+    "branch",
+    "composer",
+    "ai",
+    "workflow",
+    "productivity"
+  ],
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "AI",
+    "SCM Providers",
+    "Other"
+  ],
+  "icon": "media/icon.png",
+  "activationEvents": [
+    "onView:taskChats.taskChatsView",
+    "onCommand:cursorTaskChats.createTask",
+    "onCommand:cursorTaskChats.createSubtask",
+    "onCommand:cursorTaskChats.openTaskChat",
+    "onCommand:cursorTaskChats.attachCurrentChatToTask",
+    "onCommand:cursorTaskChats.showTasksForCurrentBranch",
+    "onCommand:cursorTaskChats.openTaskDetails"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursorTaskChats.createTask",
+        "title": "%commands.createTask.title%"
+      },
+      {
+        "command": "cursorTaskChats.createSubtask",
+        "title": "%commands.createSubtask.title%"
+      },
+      {
+        "command": "cursorTaskChats.openTaskChat",
+        "title": "%commands.openTaskChat.title%"
+      },
+      {
+        "command": "cursorTaskChats.showTasksForCurrentBranch",
+        "title": "%commands.showTasksForCurrentBranch.title%"
+      },
+      {
+        "command": "cursorTaskChats.attachCurrentChatToTask",
+        "title": "%commands.attachCurrentChatToTask.title%"
+      },
+      {
+        "command": "cursorTaskChats.changeTaskBranch",
+        "title": "%commands.changeTaskBranch.title%"
+      },
+      {
+        "command": "cursorTaskChats.openChat",
+        "title": "%commands.openChat.title%"
+      },
+      {
+        "command": "cursorTaskChats.copyPrompt",
+        "title": "%commands.copyPrompt.title%"
+      },
+      {
+        "command": "cursorTaskChats.copyTaskPrompt",
+        "title": "%commands.copyTaskPrompt.title%"
+      },
+      {
+        "command": "cursorTaskChats.archiveChat",
+        "title": "%commands.archiveChat.title%"
+      },
+      {
+        "command": "cursorTaskChats.showCommitDiff",
+        "title": "%commands.showCommitDiff.title%",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "cursorTaskChats.showBranchDiff",
+        "title": "%commands.showBranchDiff.title%",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "cursorTaskChats.renameChat",
+        "title": "%commands.renameChat.title%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "cursorTaskChats.renameTask",
+        "title": "%commands.renameTask.title%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "cursorTaskChats.changeTaskStatus",
+        "title": "%commands.changeTaskStatus.title%"
+      },
+      {
+        "command": "cursorTaskChats.archiveTask",
+        "title": "%commands.archiveTask.title%"
+      },
+      {
+        "command": "cursorTaskChats.openTaskDetails",
+        "title": "%commands.openTaskDetails.title%",
+        "icon": "$(notebook)"
+      }
+    ],
+    "configuration": {
+      "title": "Cursor Task Chats",
+      "properties": {
+        "cursorTaskChats.databaseRelativePath": {
+          "type": "string",
+          "default": ".cursor/task-chats/tasks.sqlite",
+          "description": "%config.databaseRelativePath.description%"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "taskChats",
+          "title": "%views.container.title%",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "taskChats": [
+        {
+          "id": "taskChats.taskChatsView",
+          "name": "%views.taskChats.name%"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "cursorTaskChats.createTask",
+          "when": "view == taskChats.taskChatsView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskChats.createSubtask",
+          "when": "view == taskChats.taskChatsView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskChats.attachCurrentChatToTask",
+          "when": "view == taskChats.taskChatsView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "cursorTaskChats.openTaskDetails",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.openTaskDetails",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.openTaskChat",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.createSubtask",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.copyTaskPrompt",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.renameTask",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.changeTaskStatus",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.changeTaskBranch",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.archiveTask",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.showCommitDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.showCommitDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.showBranchDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.showBranchDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == task || viewItem == task-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.openChat",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.copyPrompt",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.showCommitDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.showCommitDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.showBranchDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.showBranchDiff",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.renameChat",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.archiveChat",
+          "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test/promptTruncate.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.3"
+  }
+}
