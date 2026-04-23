@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -44,50 +44,61 @@
     "onCommand:cursorTaskChats.openTaskChat",
     "onCommand:cursorTaskChats.attachCurrentChatToTask",
     "onCommand:cursorTaskChats.showTasksForCurrentBranch",
-    "onCommand:cursorTaskChats.openTaskDetails"
+    "onCommand:cursorTaskChats.openTaskDetails",
+    "onCommand:cursorTaskChats.refreshYouGile"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "cursorTaskChats.createTask",
-        "title": "%commands.createTask.title%"
+        "title": "%commands.createTask.title%",
+        "icon": "$(add)"
       },
       {
         "command": "cursorTaskChats.createSubtask",
-        "title": "%commands.createSubtask.title%"
+        "title": "%commands.createSubtask.title%",
+        "icon": "$(list-tree)"
       },
       {
         "command": "cursorTaskChats.openTaskChat",
-        "title": "%commands.openTaskChat.title%"
+        "title": "%commands.openTaskChat.title%",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "cursorTaskChats.showTasksForCurrentBranch",
-        "title": "%commands.showTasksForCurrentBranch.title%"
+        "title": "%commands.showTasksForCurrentBranch.title%",
+        "icon": "$(git-branch)"
       },
       {
         "command": "cursorTaskChats.attachCurrentChatToTask",
-        "title": "%commands.attachCurrentChatToTask.title%"
+        "title": "%commands.attachCurrentChatToTask.title%",
+        "icon": "$(link)"
       },
       {
         "command": "cursorTaskChats.changeTaskBranch",
-        "title": "%commands.changeTaskBranch.title%"
+        "title": "%commands.changeTaskBranch.title%",
+        "icon": "$(git-branch)"
       },
       {
         "command": "cursorTaskChats.openChat",
-        "title": "%commands.openChat.title%"
+        "title": "%commands.openChat.title%",
+        "icon": "$(comment)"
       },
       {
         "command": "cursorTaskChats.copyPrompt",
-        "title": "%commands.copyPrompt.title%"
+        "title": "%commands.copyPrompt.title%",
+        "icon": "$(copy)"
       },
       {
         "command": "cursorTaskChats.copyTaskPrompt",
-        "title": "%commands.copyTaskPrompt.title%"
+        "title": "%commands.copyTaskPrompt.title%",
+        "icon": "$(copy)"
       },
       {
         "command": "cursorTaskChats.archiveChat",
-        "title": "%commands.archiveChat.title%"
+        "title": "%commands.archiveChat.title%",
+        "icon": "$(archive)"
       },
       {
         "command": "cursorTaskChats.showCommitDiff",
@@ -111,16 +122,23 @@
       },
       {
         "command": "cursorTaskChats.changeTaskStatus",
-        "title": "%commands.changeTaskStatus.title%"
+        "title": "%commands.changeTaskStatus.title%",
+        "icon": "$(check)"
       },
       {
         "command": "cursorTaskChats.archiveTask",
-        "title": "%commands.archiveTask.title%"
+        "title": "%commands.archiveTask.title%",
+        "icon": "$(archive)"
       },
       {
         "command": "cursorTaskChats.openTaskDetails",
         "title": "%commands.openTaskDetails.title%",
         "icon": "$(notebook)"
+      },
+      {
+        "command": "cursorTaskChats.refreshYouGile",
+        "title": "%commands.refreshYougile.title%",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -130,6 +148,25 @@
           "type": "string",
           "default": ".cursor/task-chats/tasks.sqlite",
           "description": "%config.databaseRelativePath.description%"
+        },
+        "cursorTaskChats.integration.source": {
+          "type": "string",
+          "enum": [
+            "local",
+            "yougile"
+          ],
+          "default": "local",
+          "description": "%config.integration.source.description%"
+        },
+        "cursorTaskChats.yougile.apiBaseUrl": {
+          "type": "string",
+          "default": "https://ru.yougile.com/api-v2",
+          "description": "%config.yougile.apiBaseUrl.description%"
+        },
+        "cursorTaskChats.yougile.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "%config.yougile.apiKey.description%"
         }
       }
     },
@@ -165,6 +202,11 @@
         {
           "command": "cursorTaskChats.attachCurrentChatToTask",
           "when": "view == taskChats.taskChatsView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskChats.refreshYouGile",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
           "group": "navigation"
         }
       ],

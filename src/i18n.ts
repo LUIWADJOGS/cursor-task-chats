@@ -112,7 +112,18 @@ export type TranslationKey =
   | 'taskDetail.removeChecklistItem'
   | 'taskDetail.removeAttachment'
   | 'messages.taskDetail.openFileFailed'
-  | 'messages.taskDetail.fileOutsideWorkspace';
+  | 'messages.taskDetail.fileOutsideWorkspace'
+  | 'yougile.rootLabel'
+  | 'yougile.rootDescription'
+  | 'yougile.taskDescription.open'
+  | 'yougile.taskDescription.done'
+  | 'yougile.taskDescription.archived'
+  | 'yougile.taskTooltip.taskId'
+  | 'yougile.apiKeyMissing'
+  | 'yougile.requestFailed'
+  | 'yougile.invalidJson'
+  | 'commands.refreshYougile.title'
+  | 'messages.refreshYougile.success';
 
 type Translations = Record<TranslationKey, string>;
 
@@ -252,6 +263,18 @@ const en: Translations = {
   'taskDetail.removeAttachment': 'Remove attachment',
   'messages.taskDetail.openFileFailed': 'Could not open this path.',
   'messages.taskDetail.fileOutsideWorkspace': 'Pick a file inside the workspace folder.',
+  'yougile.rootLabel': 'YouGile Tasks',
+  'yougile.rootDescription': 'task tree from YouGile API',
+  'yougile.taskDescription.open': 'open',
+  'yougile.taskDescription.done': 'done',
+  'yougile.taskDescription.archived': 'archived',
+  'yougile.taskTooltip.taskId': 'Task ID: {id}',
+  'yougile.apiKeyMissing':
+    'YouGile API key is empty. Set cursorTaskChats.yougile.apiKey in settings.',
+  'yougile.requestFailed': 'YouGile API request failed (HTTP {status}).',
+  'yougile.invalidJson': 'YouGile API returned invalid JSON.',
+  'commands.refreshYougile.title': 'Refresh YouGile Tasks',
+  'messages.refreshYougile.success': 'YouGile tasks refreshed.',
 };
 
 const ru: Translations = {
@@ -391,6 +414,18 @@ const ru: Translations = {
   'taskDetail.removeAttachment': 'Удалить вложение',
   'messages.taskDetail.openFileFailed': 'Не удалось открыть путь.',
   'messages.taskDetail.fileOutsideWorkspace': 'Выбери файл внутри папки workspace.',
+  'yougile.rootLabel': 'Задачи YouGile',
+  'yougile.rootDescription': 'дерево задач из YouGile API',
+  'yougile.taskDescription.open': 'открыта',
+  'yougile.taskDescription.done': 'выполнена',
+  'yougile.taskDescription.archived': 'архив',
+  'yougile.taskTooltip.taskId': 'ID задачи: {id}',
+  'yougile.apiKeyMissing':
+    'Пустой ключ YouGile API. Укажи cursorTaskChats.yougile.apiKey в настройках.',
+  'yougile.requestFailed': 'Ошибка запроса к YouGile API (HTTP {status}).',
+  'yougile.invalidJson': 'YouGile API вернул невалидный JSON.',
+  'commands.refreshYougile.title': 'Обновить задачи YouGile',
+  'messages.refreshYougile.success': 'Задачи YouGile обновлены.',
 };
 
 const translations = isRussianLanguage() ? ru : en;

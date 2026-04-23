@@ -11,8 +11,14 @@ import { computeTaskProgressSummary } from '../tasks/taskProgress';
 import { buildPromptTextForTask } from '../tasks/taskPromptContext';
 import { openTaskDetailPanel } from './taskDetailPanel';
 import { t, taskStatusShortLabel } from '../i18n';
+import { getTaskSource, getYouGileTasks, type YouGileTask } from '../integrations/yougileClient';
 
-export type TaskTreeNode = BranchRootTreeItem | TaskTreeItem | TaskChatTreeItem;
+export type TaskTreeNode =
+  | BranchRootTreeItem
+  | TaskTreeItem
+  | TaskChatTreeItem
+  | YouGileRootTreeItem
+  | YouGileTaskTreeItem;
 
 export class BranchRootTreeItem extends vscode.TreeItem {
   readonly nodeKind = 'branch' as const;
@@ -99,9 +105,59 @@ export class TaskChatTreeItem extends vscode.TreeItem {
   }
 }
 
+export class YouGileRootTreeItem extends vscode.TreeItem {
+  readonly nodeKind = 'yougile-root' as const;
+  constructor() {
+    super(t('yougile.rootLabel'), vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = 'yougileRoot';
+    this.iconPath = new vscode.ThemeIcon('cloud');
+    this.description = t('yougile.rootDescription');
+  }
+}
+
+function getYouGileStatusLabel(task: YouGileTask): string {
+  if (task.archived) {
+    return t('yougile.taskDescription.archived');
+  }
+  if (task.completed) {
+    return t('yougile.taskDescription.done');
+  }
+  return t('yougile.taskDescription.open');
+}
+
+export class YouGileTaskTreeItem extends vscode.TreeItem {
+  readonly nodeKind = 'yougile-task' as const;
+  constructor(
+    public readonly task: YouGileTask,
+    childCount: number
+  ) {
+    super(
+      task.title,
+      childCount > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
+    );
+    this.contextValue = 'yougileTask';
+    this.description = getYouGileStatusLabel(task);
+    this.iconPath = new vscode.ThemeIcon(task.completed ? 'pass' : 'checklist');
+    const tooltip = new vscode.MarkdownString();
+    tooltip.appendMarkdown(`**${task.title}**\n\n`);
+    tooltip.appendText(t('yougile.taskTooltip.taskId', { id: task.id }));
+    if (task.description?.trim()) {
+      tooltip.appendText(`\n\n${task.description.trim().slice(0, 500)}${task.description.length > 500 ? '…' : ''}`);
+    }
+    this.tooltip = tooltip;
+  }
+}
+
+type YouGileTreeData = {
+  roots: YouGileTask[];
+  childrenByParentId: Map<string, YouGileTask[]>;
+};
+
 export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<TaskTreeNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private yougileTreeData?: YouGileTreeData;
+  private yougileErrorShown = false;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -113,6 +169,8 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   }
 
   refresh(): void {
+    this.yougileTreeData = undefined;
+    this.yougileErrorShown = false;
     this._onDidChangeTreeData.fire();
   }
 
@@ -125,6 +183,11 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
     if (!folder) {
       return [];
     }
+
+    if (getTaskSource() === 'yougile') {
+      return this.getYouGileChildren(element);
+    }
+
     const repo = await openTaskRepository(this.context, folder);
     const branch = await getCurrentBranch(folder);
     const workspacePath = folder.uri.fsPath;
@@ -227,6 +290,76 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
 
     return [];
   }
+
+  private async getYouGileChildren(element?: TaskTreeNode): Promise<TaskTreeNode[]> {
+    const data = await this.getYouGileTreeData();
+    if (!element) {
+      return [new YouGileRootTreeItem()];
+    }
+
+    if (element instanceof YouGileRootTreeItem) {
+      return data.roots.map((task) => {
+        const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
+        return new YouGileTaskTreeItem(task, childCount);
+      });
+    }
+
+    if (element instanceof YouGileTaskTreeItem) {
+      const children = data.childrenByParentId.get(element.task.id) ?? [];
+      return children.map((task) => {
+        const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
+        return new YouGileTaskTreeItem(task, childCount);
+      });
+    }
+
+    return [];
+  }
+
+  private async getYouGileTreeData(): Promise<YouGileTreeData> {
+    if (this.yougileTreeData) {
+      return this.yougileTreeData;
+    }
+
+    try {
+      const tasks = await getYouGileTasks();
+      const byId = new Map(tasks.map((task) => [task.id, task]));
+      const childrenByParentId = new Map<string, YouGileTask[]>();
+      const roots: YouGileTask[] = [];
+
+      for (const task of tasks) {
+        const parentId = task.parentTaskId;
+        if (!parentId || !byId.has(parentId)) {
+          roots.push(task);
+          continue;
+        }
+        const bucket = childrenByParentId.get(parentId) ?? [];
+        bucket.push(task);
+        childrenByParentId.set(parentId, bucket);
+      }
+
+      const byUpdatedDesc = (a: YouGileTask, b: YouGileTask): number => {
+        const updatedB = String(b.raw.updatedAt ?? b.raw.updated ?? '');
+        const updatedA = String(a.raw.updatedAt ?? a.raw.updated ?? '');
+        return updatedB.localeCompare(updatedA);
+      };
+
+      roots.sort(byUpdatedDesc);
+      for (const entries of childrenByParentId.values()) {
+        entries.sort(byUpdatedDesc);
+      }
+
+      this.yougileTreeData = { roots, childrenByParentId };
+      return this.yougileTreeData;
+    } catch (error) {
+      if (!this.yougileErrorShown) {
+        this.yougileErrorShown = true;
+        void vscode.window.showWarningMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+      return { roots: [], childrenByParentId: new Map<string, YouGileTask[]>() };
+    }
+  }
 }
 
 export type TaskChatOpenTarget = {
@@ -240,6 +373,13 @@ export function registerTaskTreeCommands(
   provider: TaskChatsProvider
 ): void {
   const getFolder = (): vscode.WorkspaceFolder | undefined => provider.getCurrentWorkspaceFolder();
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.refreshYouGile', () => {
+      provider.refresh();
+      void vscode.window.showInformationMessage(t('messages.refreshYougile.success'));
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('cursorTaskChats.openTaskDetails', async (item?: TaskTreeItem) => {

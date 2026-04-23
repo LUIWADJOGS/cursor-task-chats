@@ -18,7 +18,11 @@
   "commands.changeTaskStatus.title": "Change Task Status",
   "commands.archiveTask.title": "Archive Task",
   "commands.openTaskDetails.title": "Open Task Details",
+  "commands.refreshYougile.title": "Refresh YouGile Tasks",
   "config.databaseRelativePath.description": "SQLite database path relative to the workspace folder (tasks, chats, checklist, attachments).",
+  "config.integration.source.description": "Task source for the tree view: local SQLite tasks or YouGile API tasks.",
+  "config.yougile.apiBaseUrl.description": "YouGile API base URL.",
+  "config.yougile.apiKey.description": "YouGile API key (Bearer token).",
   "views.container.title": "Task Chats",
   "views.taskChats.name": "Tasks"
 }
