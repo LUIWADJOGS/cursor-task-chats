@@ -162,11 +162,15 @@ export type TranslationKey =
   | 'messages.yougile.report.pickMode'
   | 'messages.yougile.report.modeWeek'
   | 'messages.yougile.report.modeCustom'
+  | 'messages.yougile.report.pickUser'
+  | 'messages.yougile.report.defaultUser'
+  | 'messages.yougile.report.userFromSettings'
   | 'messages.yougile.report.weekDatePrompt'
   | 'messages.yougile.report.startDatePrompt'
   | 'messages.yougile.report.endDatePrompt'
   | 'messages.yougile.report.invalidDate'
   | 'messages.yougile.report.invalidRange'
+  | 'messages.yougile.report.userMissing'
   | 'commands.openYougileTaskDetails.title'
   | 'commands.setupYouGileAuth.title'
   | 'commands.openYouGileTimeReport.title'
@@ -406,11 +410,16 @@ const en: Translations = {
   'messages.yougile.report.pickMode': 'Select report mode',
   'messages.yougile.report.modeWeek': 'Week report',
   'messages.yougile.report.modeCustom': 'Custom date range report',
+  'messages.yougile.report.pickUser': 'Select user for report.',
+  'messages.yougile.report.defaultUser': 'Default user',
+  'messages.yougile.report.userFromSettings': 'From settings',
   'messages.yougile.report.weekDatePrompt': 'Any date of the week (YYYY-MM-DD). Leave empty for current week.',
   'messages.yougile.report.startDatePrompt': 'Report start date (YYYY-MM-DD).',
   'messages.yougile.report.endDatePrompt': 'Report end date (YYYY-MM-DD).',
   'messages.yougile.report.invalidDate': 'Invalid date. Use YYYY-MM-DD.',
   'messages.yougile.report.invalidRange': 'End date must be greater than or equal to start date.',
+  'messages.yougile.report.userMissing':
+    'User is not configured for report. Run YouGile setup and select a user.',
   'commands.openYougileTaskDetails.title': 'Open YouGile Task Details',
   'commands.setupYouGileAuth.title': 'Setup YouGile Auth',
   'commands.openYouGileTimeReport.title': 'Open YouGile Time Report',
@@ -650,11 +659,16 @@ const ru: Translations = {
   'messages.yougile.report.pickMode': 'Выбери режим отчета',
   'messages.yougile.report.modeWeek': 'Отчет за неделю',
   'messages.yougile.report.modeCustom': 'Отчет за произвольный период',
+  'messages.yougile.report.pickUser': 'Выбери пользователя для отчета.',
+  'messages.yougile.report.defaultUser': 'Пользователь по умолчанию',
+  'messages.yougile.report.userFromSettings': 'Из настроек',
   'messages.yougile.report.weekDatePrompt': 'Любая дата недели (YYYY-MM-DD). Пусто = текущая неделя.',
   'messages.yougile.report.startDatePrompt': 'Дата начала отчета (YYYY-MM-DD).',
   'messages.yougile.report.endDatePrompt': 'Дата окончания отчета (YYYY-MM-DD).',
   'messages.yougile.report.invalidDate': 'Некорректная дата. Используй формат YYYY-MM-DD.',
   'messages.yougile.report.invalidRange': 'Дата окончания должна быть не раньше даты начала.',
+  'messages.yougile.report.userMissing':
+    'Для отчета не настроен пользователь. Запусти настройку YouGile и выбери пользователя.',
   'commands.openYougileTaskDetails.title': 'Открыть детали задачи YouGile',
   'commands.setupYouGileAuth.title': 'Настроить авторизацию YouGile',
   'commands.openYouGileTimeReport.title': 'Открыть отчет по времени YouGile',

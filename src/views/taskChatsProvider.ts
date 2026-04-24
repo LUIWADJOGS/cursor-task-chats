@@ -18,6 +18,7 @@ import {
   getYouGileBoards,
   getYouGileColumnGroupId,
   getYouGileColumns,
+  getYouGileExtensionConfig,
   getYouGileIntegrationOptions,
   getYouGileProjects,
   getYouGileTaskById,
@@ -284,6 +285,18 @@ function toDateKey(date: Date): string {
 
 function formatDateLabel(date: Date): string {
   return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function readPlanHoursFromTask(task: YouGileTask): number | undefined {
+  const tracking = (task.raw as Record<string, unknown>).timeTracking;
+  if (!tracking || typeof tracking !== 'object' || Array.isArray(tracking)) {
+    return undefined;
+  }
+  const plan = (tracking as Record<string, unknown>).plan;
+  if (typeof plan === 'number' && Number.isFinite(plan)) {
+    return plan;
+  }
+  return undefined;
 }
 
 type YouGileTreeData = {
@@ -916,7 +929,37 @@ export function registerTaskTreeCommands(
       const dateKeys = dateList.map((d) => toDateKey(d));
       const dateLabels = dateList.map((d) => formatDateLabel(d));
 
-      const source = await getYouGileTaskSourceData();
+      const extensionConfig = getYouGileExtensionConfig();
+      const options = getYouGileIntegrationOptions();
+      const defaultReportUserId = extensionConfig.userId ?? options.assigneeId;
+      const users = await getYouGileUsers();
+      type UserPick = vscode.QuickPickItem & { userId: string };
+      const picks: UserPick[] = users.map((user) => ({
+        label: user.realName ?? user.name ?? user.email ?? user.id,
+        description: user.email ?? user.status,
+        detail: user.id === defaultReportUserId ? t('messages.yougile.report.defaultUser') : undefined,
+        userId: user.id,
+      }));
+      if (defaultReportUserId && !picks.some((entry) => entry.userId === defaultReportUserId)) {
+        picks.unshift({
+          label: defaultReportUserId,
+          description: t('messages.yougile.report.userFromSettings'),
+          detail: t('messages.yougile.report.defaultUser'),
+          userId: defaultReportUserId,
+        });
+      }
+      const pickedUser = await vscode.window.showQuickPick<UserPick>(picks, {
+        placeHolder: t('messages.yougile.report.pickUser'),
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+      const reportUserId = pickedUser?.userId ?? defaultReportUserId;
+      if (!reportUserId) {
+        void vscode.window.showErrorMessage(t('messages.yougile.report.userMissing'));
+        return;
+      }
+
+      const source = await getYouGileTaskSourceData(false);
       const columnBoardById = new Map(
         source.columns
           .filter((column) => column.boardId)
@@ -935,23 +978,27 @@ export function registerTaskTreeCommands(
       }
 
       const perTaskPerDay = new Map<string, Map<string, number>>();
-      const options = getYouGileIntegrationOptions();
+      const overallFactByTask = new Map<string, number>();
       for (const [boardId, taskIds] of boardTaskIds.entries()) {
         const hintsTask = taskById.get(taskIds[0]);
         const result = await getYouGileTimeStatsBatch(boardId, taskIds, {
-          userId: options.assigneeId,
+          userId: reportUserId,
           companyId: hintsTask ? readCompanyIdFromTask(hintsTask) : undefined,
         });
         for (const [taskId, stats] of Object.entries(result.taskStats)) {
           const byDay = perTaskPerDay.get(taskId) ?? new Map<string, number>();
-          for (const userStats of Object.values(stats.users)) {
-            for (const record of userStats.records) {
-              if (!record.date) {
-                continue;
-              }
-              const dayKey = record.date.slice(0, 10);
-              byDay.set(dayKey, (byDay.get(dayKey) ?? 0) + record.duration);
+          const userStats = stats.users[reportUserId];
+          if (!userStats) {
+            perTaskPerDay.set(taskId, byDay);
+            continue;
+          }
+          overallFactByTask.set(taskId, userStats.totalSpentTime);
+          for (const record of userStats.records) {
+            if (!record.date) {
+              continue;
             }
+            const dayKey = record.date.slice(0, 10);
+            byDay.set(dayKey, (byDay.get(dayKey) ?? 0) + record.duration);
           }
           perTaskPerDay.set(taskId, byDay);
         }
@@ -961,11 +1008,20 @@ export function registerTaskTreeCommands(
         .map((task) => {
           const byDay = perTaskPerDay.get(task.id) ?? new Map<string, number>();
           const secondsByDay = dateKeys.map((key) => byDay.get(key) ?? 0);
-          const totalSeconds = secondsByDay.reduce((sum, value) => sum + value, 0);
-          return { taskTitle: task.title, secondsByDay, totalSeconds };
+          const periodFactSeconds = secondsByDay.reduce((sum, value) => sum + value, 0);
+          const overallFactSeconds = overallFactByTask.get(task.id) ?? 0;
+          const estimateHours = readPlanHoursFromTask(task);
+          return {
+            taskTitle: task.title,
+            secondsByDay,
+            periodFactSeconds,
+            periodEstimateHours: estimateHours,
+            overallFactSeconds,
+            overallEstimateHours: estimateHours,
+          };
         })
-        .filter((row) => row.totalSeconds > 0)
-        .sort((a, b) => b.totalSeconds - a.totalSeconds);
+        .filter((row) => row.periodFactSeconds > 0)
+        .sort((a, b) => b.periodFactSeconds - a.periodFactSeconds);
 
       await openYouGileTimeReportPanel({
         periodLabel: `${toDateKey(startDate)} — ${toDateKey(endDate)}`,

@@ -798,9 +798,11 @@ function addSyntheticNoColumn(columns: YouGileColumn[], tasks: YouGileTask[]): Y
   ];
 }
 
-export async function getYouGileTaskSourceData(): Promise<YouGileTaskSourceData> {
+export async function getYouGileTaskSourceData(includeSavedFilters = true): Promise<YouGileTaskSourceData> {
   const { apiBaseUrl, apiKey } = getYouGileConfig();
-  const options = getYouGileIntegrationOptions();
+  const options = includeSavedFilters
+    ? getYouGileIntegrationOptions()
+    : { assigneeId: undefined, projectId: undefined, boardId: undefined, showEmptyColumns: true };
   if (!apiKey) {
     throw new Error(t('yougile.apiKeyMissing'));
   }
