@@ -32,6 +32,10 @@
   "config.yougile.boardId.description": "Опциональный фильтр по ID доски YouGile для дерева.",
   "config.yougile.showEmptyColumns.description": "Показывать колонки без задач в режиме интеграции YouGile.",
   "config.yougile.showRawPayloadInDetails.description": "Показывать сырой JSON payload в карточке задачи YouGile.",
+  "config.yougile.extension.userKey.description": "Клиентский user_key YouGile для extension endpoint (timetracking).",
+  "config.yougile.extension.apiVersion.description": "Версия payload (поле v) для /data/extension/exec.",
+  "config.yougile.extension.appVersion.description": "Версия приложения, отправляемая в extension endpoint.",
+  "config.yougile.extension.clientType.description": "Тип клиента, отправляемый в extension endpoint (например web).",
   "views.container.title": "Task Chats",
   "views.taskChats.name": "Задачи"
 }

@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.16",
+  "version": "1.1.22",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -216,6 +216,26 @@
           "type": "boolean",
           "default": true,
           "description": "%config.yougile.showRawPayloadInDetails.description%"
+        },
+        "cursorTaskChats.yougile.extension.userKey": {
+          "type": "string",
+          "default": "",
+          "description": "%config.yougile.extension.userKey.description%"
+        },
+        "cursorTaskChats.yougile.extension.apiVersion": {
+          "type": "number",
+          "default": 9,
+          "description": "%config.yougile.extension.apiVersion.description%"
+        },
+        "cursorTaskChats.yougile.extension.appVersion": {
+          "type": "string",
+          "default": "40.45.1",
+          "description": "%config.yougile.extension.appVersion.description%"
+        },
+        "cursorTaskChats.yougile.extension.clientType": {
+          "type": "string",
+          "default": "web",
+          "description": "%config.yougile.extension.clientType.description%"
         }
       }
     },

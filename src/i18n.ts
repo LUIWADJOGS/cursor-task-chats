@@ -164,6 +164,29 @@ export type TranslationKey =
   | 'yougile.detail.emptyDeadline'
   | 'yougile.detail.timeTracking'
   | 'yougile.detail.emptyTimeTracking'
+  | 'yougile.detail.timeTrackingPlan'
+  | 'yougile.detail.timeTrackingWork'
+  | 'yougile.detail.timeTrackingDelta'
+  | 'yougile.detail.actualTime'
+  | 'yougile.detail.emptyActualTime'
+  | 'yougile.detail.timeUser'
+  | 'yougile.detail.timeTotal'
+  | 'yougile.detail.timeRecords'
+  | 'yougile.detail.emptyTimeRecords'
+  | 'yougile.detail.liveTimer'
+  | 'yougile.detail.liveTimerStart'
+  | 'yougile.detail.liveTimerDuration'
+  | 'yougile.detail.timeDebug'
+  | 'yougile.detail.debugStatus'
+  | 'yougile.detail.debugStatusSkipped'
+  | 'yougile.detail.debugStatusSent'
+  | 'yougile.detail.debugEndpoint'
+  | 'yougile.detail.debugError'
+  | 'yougile.detail.debugRequestBody'
+  | 'yougile.detail.sticker'
+  | 'yougile.detail.unknownSticker'
+  | 'yougile.detail.stickerId'
+  | 'yougile.detail.stickerValue'
   | 'yougile.detail.checklists'
   | 'yougile.detail.emptyChecklists'
   | 'yougile.detail.raw'
@@ -360,6 +383,29 @@ const en: Translations = {
   'yougile.detail.emptyDeadline': 'No deadline',
   'yougile.detail.timeTracking': 'Time tracking',
   'yougile.detail.emptyTimeTracking': 'No time tracking data',
+  'yougile.detail.timeTrackingPlan': 'Planned',
+  'yougile.detail.timeTrackingWork': 'Worked',
+  'yougile.detail.timeTrackingDelta': 'Delta',
+  'yougile.detail.actualTime': 'Actual time',
+  'yougile.detail.emptyActualTime': 'No client time data',
+  'yougile.detail.timeUser': 'User',
+  'yougile.detail.timeTotal': 'Total',
+  'yougile.detail.timeRecords': 'Records',
+  'yougile.detail.emptyTimeRecords': 'No records',
+  'yougile.detail.liveTimer': 'Live timer',
+  'yougile.detail.liveTimerStart': 'Started at',
+  'yougile.detail.liveTimerDuration': 'Current duration',
+  'yougile.detail.timeDebug': 'Time tracking debug',
+  'yougile.detail.debugStatus': 'Status',
+  'yougile.detail.debugStatusSkipped': 'Request skipped',
+  'yougile.detail.debugStatusSent': 'Request sent',
+  'yougile.detail.debugEndpoint': 'Endpoint',
+  'yougile.detail.debugError': 'Error',
+  'yougile.detail.debugRequestBody': 'Request body',
+  'yougile.detail.sticker': 'Sticker',
+  'yougile.detail.unknownSticker': 'Unknown sticker',
+  'yougile.detail.stickerId': 'Sticker ID',
+  'yougile.detail.stickerValue': 'Value',
   'yougile.detail.checklists': 'Checklists',
   'yougile.detail.emptyChecklists': 'No checklists',
   'yougile.detail.raw': 'Raw payload',
@@ -556,6 +602,29 @@ const ru: Translations = {
   'yougile.detail.emptyDeadline': 'Дедлайн не задан',
   'yougile.detail.timeTracking': 'Таймтрекинг',
   'yougile.detail.emptyTimeTracking': 'Нет данных таймтрекинга',
+  'yougile.detail.timeTrackingPlan': 'План',
+  'yougile.detail.timeTrackingWork': 'Факт',
+  'yougile.detail.timeTrackingDelta': 'Отклонение',
+  'yougile.detail.actualTime': 'Фактическое время',
+  'yougile.detail.emptyActualTime': 'Нет клиентских данных времени',
+  'yougile.detail.timeUser': 'Пользователь',
+  'yougile.detail.timeTotal': 'Итого',
+  'yougile.detail.timeRecords': 'Записи',
+  'yougile.detail.emptyTimeRecords': 'Записи отсутствуют',
+  'yougile.detail.liveTimer': 'Активный таймер',
+  'yougile.detail.liveTimerStart': 'Старт',
+  'yougile.detail.liveTimerDuration': 'Текущая длительность',
+  'yougile.detail.timeDebug': 'Диагностика таймтрекинга',
+  'yougile.detail.debugStatus': 'Статус',
+  'yougile.detail.debugStatusSkipped': 'Запрос пропущен',
+  'yougile.detail.debugStatusSent': 'Запрос отправлен',
+  'yougile.detail.debugEndpoint': 'Endpoint',
+  'yougile.detail.debugError': 'Ошибка',
+  'yougile.detail.debugRequestBody': 'Тело запроса',
+  'yougile.detail.sticker': 'Стикер',
+  'yougile.detail.unknownSticker': 'Неизвестный стикер',
+  'yougile.detail.stickerId': 'ID стикера',
+  'yougile.detail.stickerValue': 'Значение',
   'yougile.detail.checklists': 'Чеклисты',
   'yougile.detail.emptyChecklists': 'Чеклисты отсутствуют',
   'yougile.detail.raw': 'Сырые данные',

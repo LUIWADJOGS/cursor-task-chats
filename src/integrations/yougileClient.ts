@@ -4,6 +4,9 @@ import { t } from '../i18n';
 
 const DEFAULT_API_BASE_URL = 'https://ru.yougile.com/api-v2';
 const NO_COLUMN_GROUP_ID = '__yougile_no_column__';
+type FilterKey = 'assigneeId' | 'projectId' | 'boardId';
+const runtimeFilterOverrides: Partial<Record<FilterKey, string | undefined>> = {};
+const runtimeFilterOverrideTouched: Partial<Record<FilterKey, boolean>> = {};
 
 export interface YouGileTask {
   id: string;
@@ -48,6 +51,59 @@ export interface YouGileProject {
   raw: Record<string, unknown>;
 }
 
+export interface YouGileStickerState {
+  id: string;
+  title: string;
+  hint?: string;
+}
+
+export interface YouGileStringSticker {
+  id: string;
+  title: string;
+  icon?: string;
+  states: YouGileStickerState[];
+  raw: Record<string, unknown>;
+}
+
+export interface YouGileTimeRecord {
+  id: string;
+  date?: string;
+  duration: number;
+  revision?: string;
+}
+
+export interface YouGileTaskUserTimeStats {
+  totalSpentTime: number;
+  records: YouGileTimeRecord[];
+}
+
+export interface YouGileTaskTimeStats {
+  totalSpentTime: number;
+  users: Record<string, YouGileTaskUserTimeStats>;
+}
+
+export interface YouGileLiveTimer {
+  taskId: string;
+  userId: string;
+  startedAt?: string;
+  duration?: number;
+}
+
+export interface YouGileTimeStatsDebug {
+  skipped: boolean;
+  reason?: string;
+  requestUrl: string;
+  requestPayload?: Record<string, unknown>;
+  responseResult?: string;
+  error?: string;
+}
+
+export interface YouGileTimeStatsBatchResult {
+  taskStats: Record<string, YouGileTaskTimeStats>;
+  liveTimers: YouGileLiveTimer[];
+  debug: YouGileTimeStatsDebug;
+}
+
 export type YouGileTaskSourceData = {
   tasks: YouGileTask[];
   columns: YouGileColumn[];
@@ -62,6 +118,15 @@ export type YouGileIntegrationOptions = {
   showEmptyColumns: boolean;
 };
 
+export type YouGileExtensionConfig = {
+  userKey?: string;
+  userId?: string;
+  companyId?: string;
+  appVersion: string;
+  clientType: string;
+  v: number;
+};
+
 type YouGileListEnvelope = {
   content?: unknown;
   items?: unknown;
@@ -71,6 +136,7 @@ type YouGileListEnvelope = {
   users?: unknown;
   boards?: unknown;
   projects?: unknown;
+  stickers?: unknown;
 };
 
 type YouGileTaskListResponse = {
@@ -100,6 +166,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function maskSecret(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.length <= 10) {
+    return '***';
+  }
+  return `${value.slice(0, 6)}***${value.slice(-4)}`;
 }
 
 function toBoolean(value: unknown): boolean | undefined {
@@ -253,6 +333,53 @@ function parseProject(rawProject: unknown): YouGileProject | null {
   return { id, title, raw };
 }
 
+function parseStickerState(rawState: unknown): YouGileStickerState | null {
+  const raw = asRecord(rawState);
+  if (!raw) {
+    return null;
+  }
+  const id = asString(raw.id) ?? asString(raw.stateId);
+  if (!id) {
+    return null;
+  }
+  const title = asString(raw.title) ?? asString(raw.name) ?? id;
+  const hint = asString(raw.description) ?? asString(raw.hint);
+  return { id, title, hint };
+}
+
+function parseStringSticker(rawSticker: unknown): YouGileStringSticker | null {
+  const raw = asRecord(rawSticker);
+  if (!raw) {
+    return null;
+  }
+  const id = asString(raw.id) ?? asString(raw.stickerId);
+  if (!id) {
+    return null;
+  }
+  const title = asString(raw.title) ?? asString(raw.name) ?? id;
+  const icon = asString(raw.icon) ?? asString(raw.emoji) ?? asString(raw.iconText);
+
+  const statesRaw = raw.states;
+  let states: YouGileStickerState[] = [];
+  if (Array.isArray(statesRaw)) {
+    states = statesRaw
+      .map((entry) => parseStickerState(entry))
+      .filter((entry): entry is YouGileStickerState => Boolean(entry));
+  } else {
+    const statesRecord = asRecord(statesRaw);
+    if (statesRecord) {
+      states = Object.entries(statesRecord)
+        .map(([stateId, value]) => {
+          const parsed = parseStickerState(value);
+          return parsed ?? { id: stateId, title: stateId };
+        })
+        .filter((entry): entry is YouGileStickerState => Boolean(entry));
+    }
+  }
+
+  return { id, title, icon, states, raw };
+}
+
 function parseUser(rawUser: unknown): YouGileUser | null {
   const raw = asRecord(rawUser);
   if (!raw) {
@@ -301,16 +428,30 @@ function extractTaskArray(payload: unknown): unknown[] {
 }
 
 function requestJson<T>(url: URL, apiKey: string): Promise<T> {
+  return requestJsonWithOptions<T>(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+}
+
+function requestJsonWithOptions<T>(
+  url: URL,
+  options: {
+    method: 'GET' | 'POST';
+    headers?: Record<string, string>;
+    body?: string;
+  }
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const req = https.request(
       url,
       {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
+        method: options.method,
+        headers: options.headers,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -336,6 +477,9 @@ function requestJson<T>(url: URL, apiKey: string): Promise<T> {
     );
 
     req.on('error', (err) => reject(err));
+    if (options.body) {
+      req.write(options.body);
+    }
     req.end();
   });
 }
@@ -395,11 +539,31 @@ export function getYouGileConfig(): { apiBaseUrl: string; apiKey: string } {
 
 export function getYouGileIntegrationOptions(): YouGileIntegrationOptions {
   const config = vscode.workspace.getConfiguration('cursorTaskChats');
-  const assigneeId = config.get<string>('yougile.assigneeId')?.trim() || undefined;
-  const projectId = config.get<string>('yougile.projectId')?.trim() || undefined;
-  const boardId = config.get<string>('yougile.boardId')?.trim() || undefined;
+  const assigneeId = getFilterValueWithRuntimeOverride(
+    'assigneeId',
+    config.get<string>('yougile.assigneeId')
+  );
+  const projectId = getFilterValueWithRuntimeOverride(
+    'projectId',
+    config.get<string>('yougile.projectId')
+  );
+  const boardId = getFilterValueWithRuntimeOverride(
+    'boardId',
+    config.get<string>('yougile.boardId')
+  );
   const showEmptyColumns = config.get<boolean>('yougile.showEmptyColumns') ?? false;
   return { assigneeId, projectId, boardId, showEmptyColumns };
+}
+
+export function getYouGileExtensionConfig(): YouGileExtensionConfig {
+  const config = vscode.workspace.getConfiguration('cursorTaskChats');
+  const userKey = config.get<string>('yougile.extension.userKey')?.trim() || undefined;
+  const userId = config.get<string>('yougile.extension.userId')?.trim() || undefined;
+  const companyId = config.get<string>('yougile.extension.companyId')?.trim() || undefined;
+  const appVersion = config.get<string>('yougile.extension.appVersion')?.trim() || '40.45.1';
+  const clientType = config.get<string>('yougile.extension.clientType')?.trim() || 'web';
+  const v = config.get<number>('yougile.extension.apiVersion') ?? 9;
+  return { userKey, userId, companyId, appVersion, clientType, v };
 }
 
 function extractColumnArray(payload: unknown): unknown[] {
@@ -466,6 +630,23 @@ function extractProjectArray(payload: unknown): unknown[] {
     return [];
   }
   const candidates = [envelope.content, envelope.items, envelope.data, envelope.projects];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+  return [];
+}
+
+function extractStickerArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  const envelope = asRecord(payload) as YouGileListEnvelope | null;
+  if (!envelope) {
+    return [];
+  }
+  const candidates = [envelope.content, envelope.items, envelope.data, envelope.stickers];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
       return candidate;
@@ -634,6 +815,18 @@ export async function getYouGileProjects(): Promise<YouGileProject[]> {
     .filter((entry): entry is YouGileProject => Boolean(entry));
 }
 
+export async function getYouGileStringStickers(): Promise<YouGileStringSticker[]> {
+  const { apiBaseUrl, apiKey } = getYouGileConfig();
+  if (!apiKey) {
+    throw new Error(t('yougile.apiKeyMissing'));
+  }
+
+  const payload = await requestJson<unknown>(new URL('string-stickers', `${apiBaseUrl}/`), apiKey);
+  return extractStickerArray(payload)
+    .map((entry) => parseStringSticker(entry))
+    .filter((entry): entry is YouGileStringSticker => Boolean(entry));
+}
+
 export async function getYouGileTaskById(taskId: string): Promise<YouGileTask | undefined> {
   const { apiBaseUrl, apiKey } = getYouGileConfig();
   if (!apiKey) {
@@ -652,38 +845,264 @@ export async function getYouGileTaskById(taskId: string): Promise<YouGileTask | 
   return parsed ?? undefined;
 }
 
+function parseTimeRecord(raw: unknown): YouGileTimeRecord | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const id = asString(entry.id);
+  const duration = asNumber(entry.duration);
+  if (!id || duration === undefined) {
+    return null;
+  }
+  return {
+    id,
+    duration,
+    date: asString(entry.date),
+    revision: asString(entry.revision),
+  };
+}
+
+function parseTaskUserTimeStats(raw: unknown): YouGileTaskUserTimeStats | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const totalSpentTime = asNumber(entry.totalSpentTime);
+  if (totalSpentTime === undefined) {
+    return null;
+  }
+  const recordsRaw = Array.isArray(entry.records) ? entry.records : [];
+  const records = recordsRaw
+    .map((record) => parseTimeRecord(record))
+    .filter((record): record is YouGileTimeRecord => Boolean(record));
+  return { totalSpentTime, records };
+}
+
+function parseTaskTimeStats(raw: unknown): YouGileTaskTimeStats | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const totalSpentTime = asNumber(entry.totalSpentTime);
+  if (totalSpentTime === undefined) {
+    return null;
+  }
+  const usersRaw = asRecord(entry.users) ?? {};
+  const users: Record<string, YouGileTaskUserTimeStats> = {};
+  for (const [userId, userStatsRaw] of Object.entries(usersRaw)) {
+    const stats = parseTaskUserTimeStats(userStatsRaw);
+    if (stats) {
+      users[userId] = stats;
+    }
+  }
+  return { totalSpentTime, users };
+}
+
+function parseLiveTimer(raw: unknown): YouGileLiveTimer | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const taskId = asString(entry.taskId) ?? asString(entry.idTask);
+  const userId = asString(entry.userId) ?? asString(entry.idUser);
+  if (!taskId || !userId) {
+    return null;
+  }
+  return {
+    taskId,
+    userId,
+    startedAt: asString(entry.startedAt) ?? asString(entry.date),
+    duration: asNumber(entry.duration),
+  };
+}
+
+export async function getYouGileTimeStatsBatch(
+  boardId: string,
+  taskIds: string[],
+  hints?: { userId?: string; companyId?: string }
+): Promise<YouGileTimeStatsBatchResult> {
+  const requestUrl = 'https://yougile.com/data/extension/exec';
+  const extensionConfig = getYouGileExtensionConfig();
+  const fallbackUserId = getYouGileIntegrationOptions().assigneeId;
+  const resolvedUserId = extensionConfig.userId ?? hints?.userId ?? fallbackUserId;
+  const resolvedCompanyId = extensionConfig.companyId ?? hints?.companyId;
+  if (!boardId || taskIds.length === 0) {
+    return {
+      taskStats: {},
+      liveTimers: [],
+      debug: {
+        skipped: true,
+        reason: 'Missing boardId or taskIds',
+        requestUrl,
+      },
+    };
+  }
+  if (!extensionConfig.userKey || !resolvedUserId || !resolvedCompanyId) {
+    return {
+      taskStats: {},
+      liveTimers: [],
+      debug: {
+        skipped: true,
+        reason: `Missing required params: ${[
+          !extensionConfig.userKey ? 'userKey' : undefined,
+          !resolvedUserId ? 'userId' : undefined,
+          !resolvedCompanyId ? 'companyId' : undefined,
+        ]
+          .filter((entry): entry is string => Boolean(entry))
+          .join(', ')}`,
+        requestUrl,
+        requestPayload: {
+          userId: resolvedUserId,
+          key: maskSecret(extensionConfig.userKey),
+          companyId: resolvedCompanyId,
+          extension: 'timetracking',
+          prop: 'getBatchData',
+          args: [{ boardId, userId: resolvedUserId, taskIds }],
+          v: extensionConfig.v,
+          appVersion: extensionConfig.appVersion,
+          clientType: extensionConfig.clientType,
+        },
+      },
+    };
+  }
+
+  const payload = {
+    userId: resolvedUserId,
+    key: extensionConfig.userKey,
+    companyId: resolvedCompanyId,
+    extension: 'timetracking',
+    prop: 'getBatchData',
+    args: [{ boardId, userId: resolvedUserId, taskIds }],
+    v: extensionConfig.v,
+    appVersion: extensionConfig.appVersion,
+    clientType: extensionConfig.clientType,
+  };
+  let response: unknown;
+  try {
+    response = await requestJsonWithOptions<unknown>(new URL(requestUrl), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    return {
+      taskStats: {},
+      liveTimers: [],
+      debug: {
+        skipped: false,
+        requestUrl,
+        requestPayload: {
+          ...payload,
+          key: maskSecret(extensionConfig.userKey),
+        },
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+
+  const root = asRecord(response);
+  const data = asRecord(root?.data);
+  const taskStatsRaw = asRecord(data?.taskStats) ?? {};
+  const taskStats: Record<string, YouGileTaskTimeStats> = {};
+  for (const [taskId, rawStats] of Object.entries(taskStatsRaw)) {
+    const parsed = parseTaskTimeStats(rawStats);
+    if (parsed) {
+      taskStats[taskId] = parsed;
+    }
+  }
+
+  const liveTimersRaw = Array.isArray(data?.liveTimers) ? data.liveTimers : [];
+  const liveTimers = liveTimersRaw
+    .map((timer) => parseLiveTimer(timer))
+    .filter((timer): timer is YouGileLiveTimer => Boolean(timer));
+
+  return {
+    taskStats,
+    liveTimers,
+    debug: {
+      skipped: false,
+      requestUrl,
+      requestPayload: {
+        ...payload,
+        key: maskSecret(extensionConfig.userKey),
+      },
+      responseResult: asString(root?.result),
+    },
+  };
+}
+
 export async function setYouGileAssigneeFilter(
   assigneeId?: string
 ): Promise<void> {
   const idValue = assigneeId?.trim() || '';
-  const rootConfig = vscode.workspace.getConfiguration();
-  await rootConfig.update(
-    'cursorTaskChats.yougile.assigneeId',
-    idValue,
-    vscode.ConfigurationTarget.Workspace
-  );
+  setRuntimeFilterOverride('assigneeId', idValue);
+  await writeWorkspaceSetting('cursorTaskChats.yougile.assigneeId', idValue);
 }
 
 export async function setYouGileProjectFilter(projectId?: string): Promise<void> {
   const value = projectId?.trim() || '';
-  const rootConfig = vscode.workspace.getConfiguration();
-  await rootConfig.update(
-    'cursorTaskChats.yougile.projectId',
-    value,
-    vscode.ConfigurationTarget.Workspace
-  );
+  setRuntimeFilterOverride('projectId', value);
+  await writeWorkspaceSetting('cursorTaskChats.yougile.projectId', value);
 }
 
 export async function setYouGileBoardFilter(boardId?: string): Promise<void> {
   const value = boardId?.trim() || '';
-  const rootConfig = vscode.workspace.getConfiguration();
-  await rootConfig.update(
-    'cursorTaskChats.yougile.boardId',
-    value,
-    vscode.ConfigurationTarget.Workspace
-  );
+  setRuntimeFilterOverride('boardId', value);
+  await writeWorkspaceSetting('cursorTaskChats.yougile.boardId', value);
 }
 
 export function getYouGileColumnGroupId(task: YouGileTask): string {
   return task.columnId ?? NO_COLUMN_GROUP_ID;
+}
+
+async function writeWorkspaceSetting(key: string, value: string): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    const rootConfig = vscode.workspace.getConfiguration();
+    await rootConfig.update(key, value, vscode.ConfigurationTarget.Global);
+    return;
+  }
+
+  const vscodeDir = vscode.Uri.joinPath(folder.uri, '.vscode');
+  const settingsUri = vscode.Uri.joinPath(vscodeDir, 'settings.json');
+  await vscode.workspace.fs.createDirectory(vscodeDir);
+
+  const decoder = new TextDecoder('utf-8');
+  const encoder = new TextEncoder();
+  let content = '{}';
+  try {
+    const raw = await vscode.workspace.fs.readFile(settingsUri);
+    content = decoder.decode(raw);
+  } catch {
+    content = '{}';
+  }
+
+  let json: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(content);
+    json = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    json = {};
+  }
+
+  json[key] = value;
+  const next = `${JSON.stringify(json, null, 2)}\n`;
+  await vscode.workspace.fs.writeFile(settingsUri, encoder.encode(next));
+}
+
+function setRuntimeFilterOverride(key: FilterKey, value: string): void {
+  runtimeFilterOverrides[key] = value;
+  runtimeFilterOverrideTouched[key] = true;
+}
+
+function getFilterValueWithRuntimeOverride(
+  key: FilterKey,
+  configValue?: string
+): string | undefined {
+  const value = runtimeFilterOverrideTouched[key] ? runtimeFilterOverrides[key] : configValue;
+  return value?.trim() || undefined;
 }

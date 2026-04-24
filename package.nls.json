@@ -32,6 +32,10 @@
   "config.yougile.boardId.description": "Optional YouGile board ID filter for tree data.",
   "config.yougile.showEmptyColumns.description": "Show columns without tasks in YouGile integration mode.",
   "config.yougile.showRawPayloadInDetails.description": "Show raw JSON payload in the YouGile task detail card.",
+  "config.yougile.extension.userKey.description": "YouGile client user_key for extension endpoint (timetracking).",
+  "config.yougile.extension.apiVersion.description": "Extension API payload version (v field) for /data/extension/exec.",
+  "config.yougile.extension.appVersion.description": "Application version sent to extension endpoint.",
+  "config.yougile.extension.clientType.description": "Client type sent to extension endpoint (for example web).",
   "views.container.title": "Task Chats",
   "views.taskChats.name": "Tasks"
 }

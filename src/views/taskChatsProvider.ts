@@ -21,13 +21,19 @@ import {
   getYouGileProjects,
   getYouGileTaskById,
   getYouGileTaskSourceData,
+  getYouGileTimeStatsBatch,
+  getYouGileStringStickers,
   getYouGileUsers,
   setYouGileBoardFilter,
   setYouGileAssigneeFilter,
   setYouGileProjectFilter,
   type YouGileBoard,
   type YouGileColumn,
+  type YouGileLiveTimer,
+  type YouGileTaskTimeStats,
+  type YouGileTimeStatsDebug,
   type YouGileTask,
+  type YouGileStringSticker,
   type YouGileUser,
 } from '../integrations/yougileClient';
 
@@ -171,14 +177,16 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
   readonly nodeKind = 'yougile-task' as const;
   constructor(
     public readonly task: YouGileTask,
-    childCount: number
+    childCount: number,
+    totalSpentSeconds?: number
   ) {
     super(
       task.title,
       childCount > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
     );
     this.contextValue = 'yougileTask';
-    this.description = getYouGileStatusLabel(task);
+    const timePart = typeof totalSpentSeconds === 'number' ? ` · ${formatSpentTime(totalSpentSeconds)}` : '';
+    this.description = `${getYouGileStatusLabel(task)}${timePart}`;
     this.iconPath = new vscode.ThemeIcon(task.completed ? 'pass' : 'checklist');
     this.command = {
       command: 'cursorTaskChats.openYouGileTaskDetails',
@@ -195,6 +203,37 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
   }
 }
 
+function formatSpentTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '0m';
+  }
+  const whole = Math.floor(seconds);
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function readCompanyIdFromTask(task: YouGileTask): string | undefined {
+  const raw = task.raw as Record<string, unknown>;
+  const direct =
+    (typeof raw.companyId === 'string' && raw.companyId.trim()) ||
+    (typeof raw.idCompany === 'string' && raw.idCompany.trim());
+  if (direct) {
+    return direct;
+  }
+  const company = raw.company;
+  if (company && typeof company === 'object' && !Array.isArray(company)) {
+    const id = (company as Record<string, unknown>).id;
+    if (typeof id === 'string' && id.trim()) {
+      return id;
+    }
+  }
+  return undefined;
+}
+
 type YouGileTreeData = {
   boards: YouGileBoard[];
   columnsByBoardId: Map<string, YouGileColumn[]>;
@@ -202,6 +241,9 @@ type YouGileTreeData = {
   rootTaskIdsByColumnId: Map<string, string[]>;
   taskById: Map<string, YouGileTask>;
   childrenByParentId: Map<string, YouGileTask[]>;
+  boardIdByTaskId: Map<string, string>;
+  timeStatsByTaskId: Map<string, YouGileTaskTimeStats>;
+  liveTimerByTaskId: Map<string, YouGileLiveTimer>;
 };
 
 export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> {
@@ -379,7 +421,8 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         .filter((task): task is YouGileTask => Boolean(task))
         .map((task) => {
           const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
-          return new YouGileTaskTreeItem(task, childCount);
+          const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
+          return new YouGileTaskTreeItem(task, childCount, total);
         });
     }
 
@@ -387,7 +430,8 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       const children = data.childrenByParentId.get(element.task.id) ?? [];
       return children.map((task) => {
         const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
-        return new YouGileTaskTreeItem(task, childCount);
+        const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
+        return new YouGileTaskTreeItem(task, childCount, total);
       });
     }
 
@@ -485,18 +529,30 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       const tasks = source.tasks;
       const boards = source.boards;
       const columnsByBoardId = new Map<string, YouGileColumn[]>();
+      const boardIdByColumnId = new Map<string, string>();
       const byId = new Map(tasks.map((task) => [task.id, task]));
       const childrenByParentId = new Map<string, YouGileTask[]>();
       const rootTaskIdsByColumnId = new Map<string, string[]>();
       const taskCountByColumnId = new Map<string, number>();
+      const boardIdByTaskId = new Map<string, string>();
+      const timeStatsByTaskId = new Map<string, YouGileTaskTimeStats>();
+      const liveTimerByTaskId = new Map<string, YouGileLiveTimer>();
 
       for (const column of source.columns) {
         if (!column.boardId) {
           continue;
         }
+        boardIdByColumnId.set(column.id, column.boardId);
         const bucket = columnsByBoardId.get(column.boardId) ?? [];
         bucket.push(column);
         columnsByBoardId.set(column.boardId, bucket);
+      }
+
+      for (const task of tasks) {
+        const boardId = task.columnId ? boardIdByColumnId.get(task.columnId) : undefined;
+        if (boardId) {
+          boardIdByTaskId.set(task.id, boardId);
+        }
       }
 
       for (const task of tasks) {
@@ -545,6 +601,39 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         return options.showEmptyColumns || columns.length > 0;
       });
 
+      const taskIdsByBoardId = new Map<string, string[]>();
+      const companyIdByBoardId = new Map<string, string>();
+      for (const [taskId, boardId] of boardIdByTaskId.entries()) {
+        const bucket = taskIdsByBoardId.get(boardId) ?? [];
+        bucket.push(taskId);
+        taskIdsByBoardId.set(boardId, bucket);
+        if (!companyIdByBoardId.has(boardId)) {
+          const task = byId.get(taskId);
+          if (task) {
+            const companyId = readCompanyIdFromTask(task);
+            if (companyId) {
+              companyIdByBoardId.set(boardId, companyId);
+            }
+          }
+        }
+      }
+      for (const [boardId, taskIds] of taskIdsByBoardId.entries()) {
+        try {
+          const timeData = await getYouGileTimeStatsBatch(boardId, taskIds, {
+            userId: options.assigneeId,
+            companyId: companyIdByBoardId.get(boardId),
+          });
+          for (const [taskId, stats] of Object.entries(timeData.taskStats)) {
+            timeStatsByTaskId.set(taskId, stats);
+          }
+          for (const timer of timeData.liveTimers) {
+            liveTimerByTaskId.set(timer.taskId, timer);
+          }
+        } catch {
+          // Do not block tree rendering if extension endpoint is unavailable.
+        }
+      }
+
       this.yougileTreeData = {
         boards: visibleBoards,
         columnsByBoardId,
@@ -552,6 +641,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         rootTaskIdsByColumnId,
         taskById: byId,
         childrenByParentId,
+        boardIdByTaskId,
+        timeStatsByTaskId,
+        liveTimerByTaskId,
       };
       return this.yougileTreeData;
     } catch (error) {
@@ -568,6 +660,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         rootTaskIdsByColumnId: new Map<string, string[]>(),
         taskById: new Map<string, YouGileTask>(),
         childrenByParentId: new Map<string, YouGileTask[]>(),
+        boardIdByTaskId: new Map<string, string>(),
+        timeStatsByTaskId: new Map<string, YouGileTaskTimeStats>(),
+        liveTimerByTaskId: new Map<string, YouGileLiveTimer>(),
       };
     }
   }
@@ -746,21 +841,50 @@ export function registerTaskTreeCommands(
       let task = item.task;
       let users: YouGileUser[] = [];
       let columns: YouGileColumn[] = [];
+      let stickers: YouGileStringSticker[] = [];
+      let taskTimeStats: YouGileTaskTimeStats | undefined;
+      let liveTimer: YouGileLiveTimer | undefined;
+      let timeDebug: YouGileTimeStatsDebug | undefined;
       try {
-        const [freshTask, allUsers, allColumns] = await Promise.all([
+        const [freshTask, allUsers, allColumns, allStickers] = await Promise.all([
           getYouGileTaskById(item.task.id),
           getYouGileUsers(),
           getYouGileColumns(),
+          getYouGileStringStickers(),
         ]);
         if (freshTask) {
           task = freshTask;
         }
         users = allUsers;
         columns = allColumns;
-      } catch {
+        stickers = allStickers;
+        const boardIdByColumnId = new Map(allColumns.map((column) => [column.id, column.boardId]));
+        const boardId = task.columnId ? boardIdByColumnId.get(task.columnId) : undefined;
+        if (boardId) {
+          const timeData = await getYouGileTimeStatsBatch(boardId, [task.id], {
+            userId: getYouGileIntegrationOptions().assigneeId,
+            companyId: readCompanyIdFromTask(task),
+          });
+          taskTimeStats = timeData.taskStats[task.id];
+          liveTimer = timeData.liveTimers.find((timer) => timer.taskId === task.id);
+          timeDebug = timeData.debug;
+        } else {
+          timeDebug = {
+            skipped: true,
+            reason: 'Task has no boardId',
+            requestUrl: 'https://yougile.com/data/extension/exec',
+          };
+        }
+      } catch (error) {
         // Detail panel can still be rendered with partial tree data.
+        timeDebug = {
+          skipped: true,
+          reason: 'Failed to load task details data',
+          requestUrl: 'https://yougile.com/data/extension/exec',
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
-      await openYouGileTaskDetailPanel(task, users, columns);
+      await openYouGileTaskDetailPanel(task, users, columns, stickers, taskTimeStats, liveTimer, timeDebug);
     })
   );
 
