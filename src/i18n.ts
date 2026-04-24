@@ -115,6 +115,16 @@ export type TranslationKey =
   | 'messages.taskDetail.fileOutsideWorkspace'
   | 'yougile.rootLabel'
   | 'yougile.rootDescription'
+  | 'yougile.rootDescription.filtered'
+  | 'yougile.filter.summary.assignee'
+  | 'yougile.filter.summary.project'
+  | 'yougile.filter.summary.board'
+  | 'yougile.board.columnCount'
+  | 'yougile.column.noColumn'
+  | 'yougile.column.taskCount'
+  | 'yougile.filter.clearOption'
+  | 'yougile.filter.clearProjectOption'
+  | 'yougile.filter.clearBoardOption'
   | 'yougile.taskDescription.open'
   | 'yougile.taskDescription.done'
   | 'yougile.taskDescription.archived'
@@ -123,7 +133,41 @@ export type TranslationKey =
   | 'yougile.requestFailed'
   | 'yougile.invalidJson'
   | 'commands.refreshYougile.title'
-  | 'messages.refreshYougile.success';
+  | 'messages.refreshYougile.success'
+  | 'messages.yougile.filter.pickPlaceholder'
+  | 'messages.yougile.filter.applied'
+  | 'messages.yougile.filter.cleared'
+  | 'messages.yougile.filter.noUsers'
+  | 'messages.yougile.filter.onlyInYougile'
+  | 'messages.yougile.filter.pickProjectPlaceholder'
+  | 'messages.yougile.filter.pickBoardPlaceholder'
+  | 'messages.yougile.filter.projectApplied'
+  | 'messages.yougile.filter.projectCleared'
+  | 'messages.yougile.filter.boardApplied'
+  | 'messages.yougile.filter.boardCleared'
+  | 'commands.openYougileTaskDetails.title'
+  | 'yougile.detail.subtitle'
+  | 'yougile.detail.mainInfo'
+  | 'yougile.detail.status'
+  | 'yougile.detail.column'
+  | 'yougile.detail.unknownColumn'
+  | 'yougile.detail.createdBy'
+  | 'yougile.detail.assignees'
+  | 'yougile.detail.createdAt'
+  | 'yougile.detail.completedAt'
+  | 'yougile.detail.archivedAt'
+  | 'yougile.detail.description'
+  | 'yougile.detail.emptyDescription'
+  | 'yougile.detail.stickers'
+  | 'yougile.detail.emptyStickers'
+  | 'yougile.detail.deadline'
+  | 'yougile.detail.emptyDeadline'
+  | 'yougile.detail.timeTracking'
+  | 'yougile.detail.emptyTimeTracking'
+  | 'yougile.detail.checklists'
+  | 'yougile.detail.emptyChecklists'
+  | 'yougile.detail.raw'
+  | 'yougile.detail.emptyRaw';
 
 type Translations = Record<TranslationKey, string>;
 
@@ -265,6 +309,16 @@ const en: Translations = {
   'messages.taskDetail.fileOutsideWorkspace': 'Pick a file inside the workspace folder.',
   'yougile.rootLabel': 'YouGile Tasks',
   'yougile.rootDescription': 'task tree from YouGile API',
+  'yougile.rootDescription.filtered': 'task tree from YouGile API ({filters})',
+  'yougile.filter.summary.assignee': 'assignee: {value}',
+  'yougile.filter.summary.project': 'project: {value}',
+  'yougile.filter.summary.board': 'board: {value}',
+  'yougile.board.columnCount': '{count} column(s)',
+  'yougile.column.noColumn': 'Without column',
+  'yougile.column.taskCount': '{count} task(s)',
+  'yougile.filter.clearOption': 'Clear assignee filter',
+  'yougile.filter.clearProjectOption': 'Clear project filter',
+  'yougile.filter.clearBoardOption': 'Clear board filter',
   'yougile.taskDescription.open': 'open',
   'yougile.taskDescription.done': 'done',
   'yougile.taskDescription.archived': 'archived',
@@ -275,6 +329,41 @@ const en: Translations = {
   'yougile.invalidJson': 'YouGile API returned invalid JSON.',
   'commands.refreshYougile.title': 'Refresh YouGile Tasks',
   'messages.refreshYougile.success': 'YouGile tasks refreshed.',
+  'messages.yougile.filter.pickPlaceholder': 'Select assignee to filter tasks',
+  'messages.yougile.filter.applied': 'YouGile filter applied: {assignee}.',
+  'messages.yougile.filter.cleared': 'YouGile assignee filter cleared.',
+  'messages.yougile.filter.noUsers': 'No users returned by YouGile API.',
+  'messages.yougile.filter.onlyInYougile':
+    'This action is available only when integration source is set to YouGile.',
+  'messages.yougile.filter.pickProjectPlaceholder': 'Select project to filter boards and tasks',
+  'messages.yougile.filter.pickBoardPlaceholder': 'Select board to filter tasks',
+  'messages.yougile.filter.projectApplied': 'YouGile project filter applied: {project}.',
+  'messages.yougile.filter.projectCleared': 'YouGile project filter cleared.',
+  'messages.yougile.filter.boardApplied': 'YouGile board filter applied: {board}.',
+  'messages.yougile.filter.boardCleared': 'YouGile board filter cleared.',
+  'commands.openYougileTaskDetails.title': 'Open YouGile Task Details',
+  'yougile.detail.subtitle': 'Read-only task card from YouGile API',
+  'yougile.detail.mainInfo': 'Main info',
+  'yougile.detail.status': 'Status',
+  'yougile.detail.column': 'Column',
+  'yougile.detail.unknownColumn': 'Unknown column',
+  'yougile.detail.createdBy': 'Created by',
+  'yougile.detail.assignees': 'Assignees',
+  'yougile.detail.createdAt': 'Created at',
+  'yougile.detail.completedAt': 'Completed at',
+  'yougile.detail.archivedAt': 'Archived at',
+  'yougile.detail.description': 'Description',
+  'yougile.detail.emptyDescription': 'No description',
+  'yougile.detail.stickers': 'Stickers',
+  'yougile.detail.emptyStickers': 'No stickers',
+  'yougile.detail.deadline': 'Deadline',
+  'yougile.detail.emptyDeadline': 'No deadline',
+  'yougile.detail.timeTracking': 'Time tracking',
+  'yougile.detail.emptyTimeTracking': 'No time tracking data',
+  'yougile.detail.checklists': 'Checklists',
+  'yougile.detail.emptyChecklists': 'No checklists',
+  'yougile.detail.raw': 'Raw payload',
+  'yougile.detail.emptyRaw': 'No data',
 };
 
 const ru: Translations = {
@@ -416,6 +505,16 @@ const ru: Translations = {
   'messages.taskDetail.fileOutsideWorkspace': 'Выбери файл внутри папки workspace.',
   'yougile.rootLabel': 'Задачи YouGile',
   'yougile.rootDescription': 'дерево задач из YouGile API',
+  'yougile.rootDescription.filtered': 'дерево задач из YouGile API ({filters})',
+  'yougile.filter.summary.assignee': 'ответственный: {value}',
+  'yougile.filter.summary.project': 'проект: {value}',
+  'yougile.filter.summary.board': 'доска: {value}',
+  'yougile.board.columnCount': '{count} колонок',
+  'yougile.column.noColumn': 'Без колонки',
+  'yougile.column.taskCount': '{count} задач',
+  'yougile.filter.clearOption': 'Сбросить фильтр по ответственному',
+  'yougile.filter.clearProjectOption': 'Сбросить фильтр по проекту',
+  'yougile.filter.clearBoardOption': 'Сбросить фильтр по доске',
   'yougile.taskDescription.open': 'открыта',
   'yougile.taskDescription.done': 'выполнена',
   'yougile.taskDescription.archived': 'архив',
@@ -426,6 +525,41 @@ const ru: Translations = {
   'yougile.invalidJson': 'YouGile API вернул невалидный JSON.',
   'commands.refreshYougile.title': 'Обновить задачи YouGile',
   'messages.refreshYougile.success': 'Задачи YouGile обновлены.',
+  'messages.yougile.filter.pickPlaceholder': 'Выбери ответственного для фильтра задач',
+  'messages.yougile.filter.applied': 'Фильтр YouGile применён: {assignee}.',
+  'messages.yougile.filter.cleared': 'Фильтр YouGile по ответственному сброшен.',
+  'messages.yougile.filter.noUsers': 'YouGile API не вернул пользователей.',
+  'messages.yougile.filter.onlyInYougile':
+    'Действие доступно только когда источник интеграции выбран YouGile.',
+  'messages.yougile.filter.pickProjectPlaceholder': 'Выбери проект для фильтра досок и задач',
+  'messages.yougile.filter.pickBoardPlaceholder': 'Выбери доску для фильтра задач',
+  'messages.yougile.filter.projectApplied': 'Фильтр YouGile по проекту применён: {project}.',
+  'messages.yougile.filter.projectCleared': 'Фильтр YouGile по проекту сброшен.',
+  'messages.yougile.filter.boardApplied': 'Фильтр YouGile по доске применён: {board}.',
+  'messages.yougile.filter.boardCleared': 'Фильтр YouGile по доске сброшен.',
+  'commands.openYougileTaskDetails.title': 'Открыть детали задачи YouGile',
+  'yougile.detail.subtitle': 'Карточка задачи только для чтения из YouGile API',
+  'yougile.detail.mainInfo': 'Основная информация',
+  'yougile.detail.status': 'Статус',
+  'yougile.detail.column': 'Колонка',
+  'yougile.detail.unknownColumn': 'Неизвестная колонка',
+  'yougile.detail.createdBy': 'Создал',
+  'yougile.detail.assignees': 'Ответственные',
+  'yougile.detail.createdAt': 'Создана',
+  'yougile.detail.completedAt': 'Завершена',
+  'yougile.detail.archivedAt': 'В архиве с',
+  'yougile.detail.description': 'Описание',
+  'yougile.detail.emptyDescription': 'Описание отсутствует',
+  'yougile.detail.stickers': 'Стикеры',
+  'yougile.detail.emptyStickers': 'Стикеры отсутствуют',
+  'yougile.detail.deadline': 'Дедлайн',
+  'yougile.detail.emptyDeadline': 'Дедлайн не задан',
+  'yougile.detail.timeTracking': 'Таймтрекинг',
+  'yougile.detail.emptyTimeTracking': 'Нет данных таймтрекинга',
+  'yougile.detail.checklists': 'Чеклисты',
+  'yougile.detail.emptyChecklists': 'Чеклисты отсутствуют',
+  'yougile.detail.raw': 'Сырые данные',
+  'yougile.detail.emptyRaw': 'Данные отсутствуют',
 };
 
 const translations = isRussianLanguage() ? ru : en;

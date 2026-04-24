@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.1",
+  "version": "1.1.16",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -45,7 +45,11 @@
     "onCommand:cursorTaskChats.attachCurrentChatToTask",
     "onCommand:cursorTaskChats.showTasksForCurrentBranch",
     "onCommand:cursorTaskChats.openTaskDetails",
-    "onCommand:cursorTaskChats.refreshYouGile"
+    "onCommand:cursorTaskChats.refreshYouGile",
+    "onCommand:cursorTaskChats.selectYouGileAssigneeFilter",
+    "onCommand:cursorTaskChats.selectYouGileProjectFilter",
+    "onCommand:cursorTaskChats.selectYouGileBoardFilter",
+    "onCommand:cursorTaskChats.openYouGileTaskDetails"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -139,6 +143,26 @@
         "command": "cursorTaskChats.refreshYouGile",
         "title": "%commands.refreshYougile.title%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "cursorTaskChats.selectYouGileAssigneeFilter",
+        "title": "%commands.selectYougileAssigneeFilter.title%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "cursorTaskChats.selectYouGileProjectFilter",
+        "title": "%commands.selectYougileProjectFilter.title%",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "cursorTaskChats.selectYouGileBoardFilter",
+        "title": "%commands.selectYougileBoardFilter.title%",
+        "icon": "$(project)"
+      },
+      {
+        "command": "cursorTaskChats.openYouGileTaskDetails",
+        "title": "%commands.openYougileTaskDetails.title%",
+        "icon": "$(notebook)"
       }
     ],
     "configuration": {
@@ -167,6 +191,31 @@
           "type": "string",
           "default": "",
           "description": "%config.yougile.apiKey.description%"
+        },
+        "cursorTaskChats.yougile.assigneeId": {
+          "type": "string",
+          "default": "",
+          "description": "%config.yougile.assigneeId.description%"
+        },
+        "cursorTaskChats.yougile.projectId": {
+          "type": "string",
+          "default": "",
+          "description": "%config.yougile.projectId.description%"
+        },
+        "cursorTaskChats.yougile.boardId": {
+          "type": "string",
+          "default": "",
+          "description": "%config.yougile.boardId.description%"
+        },
+        "cursorTaskChats.yougile.showEmptyColumns": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.yougile.showEmptyColumns.description%"
+        },
+        "cursorTaskChats.yougile.showRawPayloadInDetails": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.yougile.showRawPayloadInDetails.description%"
         }
       }
     },
@@ -208,6 +257,21 @@
           "command": "cursorTaskChats.refreshYouGile",
           "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
           "group": "navigation"
+        },
+        {
+          "command": "cursorTaskChats.selectYouGileAssigneeFilter",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cursorTaskChats.selectYouGileProjectFilter",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
+          "group": "navigation@3"
+        },
+        {
+          "command": "cursorTaskChats.selectYouGileBoardFilter",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -299,6 +363,15 @@
         {
           "command": "cursorTaskChats.archiveChat",
           "when": "view == taskChats.taskChatsView && (viewItem == taskChat || viewItem == taskChat-with-diff)"
+        },
+        {
+          "command": "cursorTaskChats.openYouGileTaskDetails",
+          "when": "view == taskChats.taskChatsView && viewItem == yougileTask",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskChats.openYouGileTaskDetails",
+          "when": "view == taskChats.taskChatsView && viewItem == yougileTask"
         }
       ]
     }

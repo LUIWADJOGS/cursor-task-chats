@@ -10,14 +10,34 @@ import { openComposerWithCursorCommand } from '../cursor/openComposer';
 import { computeTaskProgressSummary } from '../tasks/taskProgress';
 import { buildPromptTextForTask } from '../tasks/taskPromptContext';
 import { openTaskDetailPanel } from './taskDetailPanel';
+import { openYouGileTaskDetailPanel } from './yougileTaskDetailPanel';
 import { t, taskStatusShortLabel } from '../i18n';
-import { getTaskSource, getYouGileTasks, type YouGileTask } from '../integrations/yougileClient';
+import {
+  getTaskSource,
+  getYouGileBoards,
+  getYouGileColumnGroupId,
+  getYouGileColumns,
+  getYouGileIntegrationOptions,
+  getYouGileProjects,
+  getYouGileTaskById,
+  getYouGileTaskSourceData,
+  getYouGileUsers,
+  setYouGileBoardFilter,
+  setYouGileAssigneeFilter,
+  setYouGileProjectFilter,
+  type YouGileBoard,
+  type YouGileColumn,
+  type YouGileTask,
+  type YouGileUser,
+} from '../integrations/yougileClient';
 
 export type TaskTreeNode =
   | BranchRootTreeItem
   | TaskTreeItem
   | TaskChatTreeItem
   | YouGileRootTreeItem
+  | YouGileBoardTreeItem
+  | YouGileColumnTreeItem
   | YouGileTaskTreeItem;
 
 export class BranchRootTreeItem extends vscode.TreeItem {
@@ -107,11 +127,33 @@ export class TaskChatTreeItem extends vscode.TreeItem {
 
 export class YouGileRootTreeItem extends vscode.TreeItem {
   readonly nodeKind = 'yougile-root' as const;
-  constructor() {
+  constructor(filterLabel?: string) {
     super(t('yougile.rootLabel'), vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'yougileRoot';
     this.iconPath = new vscode.ThemeIcon('cloud');
-    this.description = t('yougile.rootDescription');
+    this.description = filterLabel
+      ? t('yougile.rootDescription.filtered', { filters: filterLabel })
+      : t('yougile.rootDescription');
+  }
+}
+
+export class YouGileColumnTreeItem extends vscode.TreeItem {
+  readonly nodeKind = 'yougile-column' as const;
+  constructor(public readonly column: YouGileColumn, taskCount: number) {
+    super(column.title, vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = 'yougileColumn';
+    this.iconPath = new vscode.ThemeIcon('list-unordered');
+    this.description = t('yougile.column.taskCount', { count: String(taskCount) });
+  }
+}
+
+export class YouGileBoardTreeItem extends vscode.TreeItem {
+  readonly nodeKind = 'yougile-board' as const;
+  constructor(public readonly board: YouGileBoard, columnCount: number) {
+    super(board.title, vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = 'yougileBoard';
+    this.iconPath = new vscode.ThemeIcon('project');
+    this.description = t('yougile.board.columnCount', { count: String(columnCount) });
   }
 }
 
@@ -138,6 +180,11 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
     this.contextValue = 'yougileTask';
     this.description = getYouGileStatusLabel(task);
     this.iconPath = new vscode.ThemeIcon(task.completed ? 'pass' : 'checklist');
+    this.command = {
+      command: 'cursorTaskChats.openYouGileTaskDetails',
+      title: t('commands.openYougileTaskDetails.title'),
+      arguments: [this],
+    };
     const tooltip = new vscode.MarkdownString();
     tooltip.appendMarkdown(`**${task.title}**\n\n`);
     tooltip.appendText(t('yougile.taskTooltip.taskId', { id: task.id }));
@@ -149,7 +196,11 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
 }
 
 type YouGileTreeData = {
-  roots: YouGileTask[];
+  boards: YouGileBoard[];
+  columnsByBoardId: Map<string, YouGileColumn[]>;
+  taskCountByColumnId: Map<string, number>;
+  rootTaskIdsByColumnId: Map<string, string[]>;
+  taskById: Map<string, YouGileTask>;
   childrenByParentId: Map<string, YouGileTask[]>;
 };
 
@@ -158,6 +209,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private yougileTreeData?: YouGileTreeData;
   private yougileErrorShown = false;
+  private readonly yougileAssigneeLabelCache = new Map<string, string>();
+  private readonly yougileProjectLabelCache = new Map<string, string>();
+  private readonly yougileBoardLabelCache = new Map<string, string>();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -171,6 +225,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   refresh(): void {
     this.yougileTreeData = undefined;
     this.yougileErrorShown = false;
+    this.yougileAssigneeLabelCache.clear();
+    this.yougileProjectLabelCache.clear();
+    this.yougileBoardLabelCache.clear();
     this._onDidChangeTreeData.fire();
   }
 
@@ -294,14 +351,36 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   private async getYouGileChildren(element?: TaskTreeNode): Promise<TaskTreeNode[]> {
     const data = await this.getYouGileTreeData();
     if (!element) {
-      return [new YouGileRootTreeItem()];
+      const options = getYouGileIntegrationOptions();
+      const filterLabel = await this.resolveYouGileFilterLabel(
+        options.assigneeId,
+        options.projectId,
+        options.boardId
+      );
+      return [new YouGileRootTreeItem(filterLabel)];
     }
 
     if (element instanceof YouGileRootTreeItem) {
-      return data.roots.map((task) => {
-        const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
-        return new YouGileTaskTreeItem(task, childCount);
+      return data.boards.map((board) => {
+        const columns = data.columnsByBoardId.get(board.id) ?? [];
+        return new YouGileBoardTreeItem(board, columns.length);
       });
+    }
+
+    if (element instanceof YouGileBoardTreeItem) {
+      const columns = data.columnsByBoardId.get(element.board.id) ?? [];
+      return columns.map((column) => new YouGileColumnTreeItem(column, data.taskCountByColumnId.get(column.id) ?? 0));
+    }
+
+    if (element instanceof YouGileColumnTreeItem) {
+      const rootIds = data.rootTaskIdsByColumnId.get(element.column.id) ?? [];
+      return rootIds
+        .map((taskId) => data.taskById.get(taskId))
+        .filter((task): task is YouGileTask => Boolean(task))
+        .map((task) => {
+          const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
+          return new YouGileTaskTreeItem(task, childCount);
+        });
     }
 
     if (element instanceof YouGileTaskTreeItem) {
@@ -315,21 +394,122 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
     return [];
   }
 
+  private async resolveYouGileAssigneeLabel(assigneeId?: string): Promise<string | undefined> {
+    if (!assigneeId) {
+      return undefined;
+    }
+    const cached = this.yougileAssigneeLabelCache.get(assigneeId);
+    if (cached) {
+      return cached;
+    }
+    try {
+      const users = await getYouGileUsers();
+      const matched = users.find((user) => user.id === assigneeId);
+      const label = matched?.realName ?? matched?.name ?? matched?.email ?? assigneeId;
+      this.yougileAssigneeLabelCache.set(assigneeId, label);
+      return label;
+    } catch {
+      return assigneeId;
+    }
+  }
+
+  private async resolveYouGileProjectLabel(projectId?: string): Promise<string | undefined> {
+    if (!projectId) {
+      return undefined;
+    }
+    const cached = this.yougileProjectLabelCache.get(projectId);
+    if (cached) {
+      return cached;
+    }
+    try {
+      const projects = await getYouGileProjects();
+      const matched = projects.find((project) => project.id === projectId);
+      const label = matched?.title ?? projectId;
+      this.yougileProjectLabelCache.set(projectId, label);
+      return label;
+    } catch {
+      return projectId;
+    }
+  }
+
+  private async resolveYouGileBoardLabel(boardId?: string): Promise<string | undefined> {
+    if (!boardId) {
+      return undefined;
+    }
+    const cached = this.yougileBoardLabelCache.get(boardId);
+    if (cached) {
+      return cached;
+    }
+    try {
+      const boards = await getYouGileBoards();
+      const matched = boards.find((board) => board.id === boardId);
+      const label = matched?.title ?? boardId;
+      this.yougileBoardLabelCache.set(boardId, label);
+      return label;
+    } catch {
+      return boardId;
+    }
+  }
+
+  private async resolveYouGileFilterLabel(
+    assigneeId?: string,
+    projectId?: string,
+    boardId?: string
+  ): Promise<string | undefined> {
+    const [assigneeLabel, projectLabel, boardLabel] = await Promise.all([
+      this.resolveYouGileAssigneeLabel(assigneeId),
+      this.resolveYouGileProjectLabel(projectId),
+      this.resolveYouGileBoardLabel(boardId),
+    ]);
+    const parts: string[] = [];
+    if (assigneeLabel) {
+      parts.push(t('yougile.filter.summary.assignee', { value: assigneeLabel }));
+    }
+    if (projectLabel) {
+      parts.push(t('yougile.filter.summary.project', { value: projectLabel }));
+    }
+    if (boardLabel) {
+      parts.push(t('yougile.filter.summary.board', { value: boardLabel }));
+    }
+    return parts.length > 0 ? parts.join('; ') : undefined;
+  }
+
   private async getYouGileTreeData(): Promise<YouGileTreeData> {
     if (this.yougileTreeData) {
       return this.yougileTreeData;
     }
 
     try {
-      const tasks = await getYouGileTasks();
+      const source = await getYouGileTaskSourceData();
+      const options = getYouGileIntegrationOptions();
+      const tasks = source.tasks;
+      const boards = source.boards;
+      const columnsByBoardId = new Map<string, YouGileColumn[]>();
       const byId = new Map(tasks.map((task) => [task.id, task]));
       const childrenByParentId = new Map<string, YouGileTask[]>();
-      const roots: YouGileTask[] = [];
+      const rootTaskIdsByColumnId = new Map<string, string[]>();
+      const taskCountByColumnId = new Map<string, number>();
+
+      for (const column of source.columns) {
+        if (!column.boardId) {
+          continue;
+        }
+        const bucket = columnsByBoardId.get(column.boardId) ?? [];
+        bucket.push(column);
+        columnsByBoardId.set(column.boardId, bucket);
+      }
 
       for (const task of tasks) {
+        const columnGroupId = getYouGileColumnGroupId(task);
+        taskCountByColumnId.set(columnGroupId, (taskCountByColumnId.get(columnGroupId) ?? 0) + 1);
+
         const parentId = task.parentTaskId;
-        if (!parentId || !byId.has(parentId)) {
-          roots.push(task);
+        const parentTask = parentId ? byId.get(parentId) : undefined;
+        const parentGroupId = parentTask ? getYouGileColumnGroupId(parentTask) : undefined;
+        if (!parentId || !parentTask || parentGroupId !== columnGroupId) {
+          const bucket = rootTaskIdsByColumnId.get(columnGroupId) ?? [];
+          bucket.push(task.id);
+          rootTaskIdsByColumnId.set(columnGroupId, bucket);
           continue;
         }
         const bucket = childrenByParentId.get(parentId) ?? [];
@@ -337,18 +517,42 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         childrenByParentId.set(parentId, bucket);
       }
 
-      const byUpdatedDesc = (a: YouGileTask, b: YouGileTask): number => {
-        const updatedB = String(b.raw.updatedAt ?? b.raw.updated ?? '');
-        const updatedA = String(a.raw.updatedAt ?? a.raw.updated ?? '');
-        return updatedB.localeCompare(updatedA);
-      };
-
-      roots.sort(byUpdatedDesc);
-      for (const entries of childrenByParentId.values()) {
-        entries.sort(byUpdatedDesc);
+      for (const [columnId, rootIds] of rootTaskIdsByColumnId.entries()) {
+        rootIds.sort((a, b) => {
+          const taskA = byId.get(a);
+          const taskB = byId.get(b);
+          if (!taskA || !taskB) {
+            return 0;
+          }
+          return taskA.orderIndex - taskB.orderIndex;
+        });
+        rootTaskIdsByColumnId.set(columnId, rootIds);
       }
 
-      this.yougileTreeData = { roots, childrenByParentId };
+      for (const entries of childrenByParentId.values()) {
+        entries.sort((a, b) => a.orderIndex - b.orderIndex);
+      }
+
+      for (const [boardId, columns] of columnsByBoardId.entries()) {
+        const filtered = columns.filter(
+          (column) => options.showEmptyColumns || (taskCountByColumnId.get(column.id) ?? 0) > 0
+        );
+        columnsByBoardId.set(boardId, filtered);
+      }
+
+      const visibleBoards = boards.filter((board) => {
+        const columns = columnsByBoardId.get(board.id) ?? [];
+        return options.showEmptyColumns || columns.length > 0;
+      });
+
+      this.yougileTreeData = {
+        boards: visibleBoards,
+        columnsByBoardId,
+        taskCountByColumnId,
+        rootTaskIdsByColumnId,
+        taskById: byId,
+        childrenByParentId,
+      };
       return this.yougileTreeData;
     } catch (error) {
       if (!this.yougileErrorShown) {
@@ -357,7 +561,14 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
           error instanceof Error ? error.message : String(error)
         );
       }
-      return { roots: [], childrenByParentId: new Map<string, YouGileTask[]>() };
+      return {
+        boards: [],
+        columnsByBoardId: new Map<string, YouGileColumn[]>(),
+        taskCountByColumnId: new Map<string, number>(),
+        rootTaskIdsByColumnId: new Map<string, string[]>(),
+        taskById: new Map<string, YouGileTask>(),
+        childrenByParentId: new Map<string, YouGileTask[]>(),
+      };
     }
   }
 }
@@ -378,6 +589,178 @@ export function registerTaskTreeCommands(
     vscode.commands.registerCommand('cursorTaskChats.refreshYouGile', () => {
       provider.refresh();
       void vscode.window.showInformationMessage(t('messages.refreshYougile.success'));
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.selectYouGileAssigneeFilter', async () => {
+      if (getTaskSource() !== 'yougile') {
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.onlyInYougile'));
+        return;
+      }
+
+      const users = await getYouGileUsers();
+      if (users.length === 0) {
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.noUsers'));
+        return;
+      }
+
+      const sortedUsers = users.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+
+      type UserPickItem = vscode.QuickPickItem & {
+        pickType: 'clear' | 'user';
+        user?: YouGileUser;
+      };
+
+      const picks: UserPickItem[] = [
+        {
+          pickType: 'clear',
+          label: t('yougile.filter.clearOption'),
+          description: getYouGileIntegrationOptions().assigneeId ?? undefined,
+        },
+        ...sortedUsers.map((user) => ({
+          pickType: 'user' as const,
+          label: user.realName ?? user.name ?? user.email ?? user.id,
+          description: user.status,
+          user,
+        })),
+      ];
+
+      const picked = await vscode.window.showQuickPick<UserPickItem>(picks, {
+        placeHolder: t('messages.yougile.filter.pickPlaceholder'),
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+
+      if (!picked) {
+        return;
+      }
+
+      if (picked.pickType === 'clear') {
+        await setYouGileAssigneeFilter(undefined);
+        provider.refresh();
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.cleared'));
+        return;
+      }
+
+      if (!picked.user) {
+        return;
+      }
+
+      await setYouGileAssigneeFilter(picked.user.id);
+      provider.refresh();
+      void vscode.window.showInformationMessage(
+        t('messages.yougile.filter.applied', {
+          assignee: picked.user.realName ?? picked.user.name ?? picked.user.email ?? picked.user.id,
+        })
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.selectYouGileProjectFilter', async () => {
+      if (getTaskSource() !== 'yougile') {
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.onlyInYougile'));
+        return;
+      }
+      const [projects, allBoards] = await Promise.all([getYouGileProjects(), getYouGileBoards()]);
+      type ProjectPick = vscode.QuickPickItem & { projectId?: string };
+      const currentProjectId = getYouGileIntegrationOptions().projectId;
+      const picks: ProjectPick[] = [
+        {
+          label: t('yougile.filter.clearProjectOption'),
+          description: currentProjectId ?? undefined,
+          projectId: undefined,
+        },
+        ...projects.map((project) => ({ label: project.title, projectId: project.id })),
+      ];
+
+      const picked = await vscode.window.showQuickPick<ProjectPick>(picks, {
+        placeHolder: t('messages.yougile.filter.pickProjectPlaceholder'),
+      });
+      if (!picked) {
+        return;
+      }
+      await setYouGileProjectFilter(picked.projectId);
+      const currentBoardId = getYouGileIntegrationOptions().boardId;
+      if (!picked.projectId) {
+        await setYouGileBoardFilter(undefined);
+      } else if (currentBoardId) {
+        const currentBoard = allBoards.find((board) => board.id === currentBoardId);
+        if (!currentBoard || currentBoard.projectId !== picked.projectId) {
+          await setYouGileBoardFilter(undefined);
+        }
+      }
+      provider.refresh();
+      void vscode.window.showInformationMessage(
+        picked.projectId
+          ? t('messages.yougile.filter.projectApplied', { project: picked.label })
+          : t('messages.yougile.filter.projectCleared')
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.selectYouGileBoardFilter', async () => {
+      if (getTaskSource() !== 'yougile') {
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.onlyInYougile'));
+        return;
+      }
+
+      const options = getYouGileIntegrationOptions();
+      const boards = (await getYouGileBoards()).filter(
+        (board) => !options.projectId || board.projectId === options.projectId
+      );
+      type BoardPick = vscode.QuickPickItem & { boardId?: string };
+      const picks: BoardPick[] = [
+        {
+          label: t('yougile.filter.clearBoardOption'),
+          description: options.boardId ?? undefined,
+          boardId: undefined,
+        },
+        ...boards.map((board) => ({ label: board.title, boardId: board.id })),
+      ];
+      const picked = await vscode.window.showQuickPick<BoardPick>(picks, {
+        placeHolder: t('messages.yougile.filter.pickBoardPlaceholder'),
+      });
+      if (!picked) {
+        return;
+      }
+      await setYouGileBoardFilter(picked.boardId);
+      provider.refresh();
+      void vscode.window.showInformationMessage(
+        picked.boardId
+          ? t('messages.yougile.filter.boardApplied', { board: picked.label })
+          : t('messages.yougile.filter.boardCleared')
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.openYouGileTaskDetails', async (item?: YouGileTaskTreeItem) => {
+      if (!item) {
+        return;
+      }
+      let task = item.task;
+      let users: YouGileUser[] = [];
+      let columns: YouGileColumn[] = [];
+      try {
+        const [freshTask, allUsers, allColumns] = await Promise.all([
+          getYouGileTaskById(item.task.id),
+          getYouGileUsers(),
+          getYouGileColumns(),
+        ]);
+        if (freshTask) {
+          task = freshTask;
+        }
+        users = allUsers;
+        columns = allColumns;
+      } catch {
+        // Detail panel can still be rendered with partial tree data.
+      }
+      await openYouGileTaskDetailPanel(task, users, columns);
     })
   );
 
