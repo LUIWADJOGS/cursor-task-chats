@@ -11,6 +11,7 @@ import { computeTaskProgressSummary } from '../tasks/taskProgress';
 import { buildPromptTextForTask } from '../tasks/taskPromptContext';
 import { openTaskDetailPanel } from './taskDetailPanel';
 import { openYouGileTaskDetailPanel } from './yougileTaskDetailPanel';
+import { openYouGileTimeReportPanel } from './yougileTimeReportPanel';
 import { t, taskStatusShortLabel } from '../i18n';
 import {
   getTaskSource,
@@ -22,8 +23,12 @@ import {
   getYouGileTaskById,
   getYouGileTaskSourceData,
   getYouGileTimeStatsBatch,
+  getYouGileAuthCompanies,
+  resolveYouGileApiKey,
+  saveYouGileAuthSetup,
   getYouGileStringStickers,
   getYouGileUsers,
+  getYouGileUsersByApiKey,
   setYouGileBoardFilter,
   setYouGileAssigneeFilter,
   setYouGileProjectFilter,
@@ -232,6 +237,53 @@ function readCompanyIdFromTask(task: YouGileTask): string | undefined {
     }
   }
   return undefined;
+}
+
+function parseIsoDateInput(value: string): Date | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    return undefined;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return undefined;
+  }
+  return date;
+}
+
+function startOfWeekMonday(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const weekday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - weekday);
+  return d;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDateLabel(date: Date): string {
+  return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
 type YouGileTreeData = {
@@ -684,6 +736,242 @@ export function registerTaskTreeCommands(
     vscode.commands.registerCommand('cursorTaskChats.refreshYouGile', () => {
       provider.refresh();
       void vscode.window.showInformationMessage(t('messages.refreshYougile.success'));
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.setupYouGileAuth', async () => {
+      try {
+        const login = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.setup.loginPrompt'),
+          ignoreFocusOut: true,
+          validateInput: (value) => (value?.trim() ? null : t('messages.yougile.setup.loginValidation')),
+        });
+        if (!login?.trim()) {
+          return;
+        }
+        const password = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.setup.passwordPrompt'),
+          password: true,
+          ignoreFocusOut: true,
+          validateInput: (value) => (value?.trim() ? null : t('messages.yougile.setup.passwordValidation')),
+        });
+        if (!password?.trim()) {
+          return;
+        }
+
+        const companies = await getYouGileAuthCompanies(login.trim(), password.trim());
+        if (companies.length === 0) {
+          void vscode.window.showWarningMessage(t('messages.yougile.setup.noCompanies'));
+          return;
+        }
+        const picked = await vscode.window.showQuickPick(
+          companies.map((company) => ({
+            label: company.name,
+            description: company.id,
+            detail: company.isAdmin ? t('messages.yougile.setup.companyAdmin') : undefined,
+            company,
+          })),
+          {
+            placeHolder: t('messages.yougile.setup.pickCompany'),
+            matchOnDescription: true,
+            matchOnDetail: true,
+          }
+        );
+        if (!picked?.company) {
+          return;
+        }
+
+        const keyData = await resolveYouGileApiKey(login.trim(), password.trim(), picked.company.id);
+        const userKey = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.setup.userKeyPrompt'),
+          ignoreFocusOut: true,
+          validateInput: (value) => (value?.trim() ? null : t('messages.yougile.setup.userKeyValidation')),
+        });
+        if (!userKey?.trim()) {
+          return;
+        }
+        let selectedUserId = keyData.userId;
+        if (!selectedUserId) {
+          const apiUsers = await getYouGileUsersByApiKey(keyData.key);
+          if (apiUsers.length > 0) {
+            const userPick = await vscode.window.showQuickPick(
+              apiUsers.map((user) => ({
+                label: user.realName ?? user.name ?? user.email ?? user.id,
+                description: user.email ?? user.status,
+                userId: user.id,
+              })),
+              {
+                placeHolder: t('messages.yougile.setup.pickUser'),
+                matchOnDescription: true,
+              }
+            );
+            selectedUserId = userPick?.userId;
+          }
+        }
+        if (!selectedUserId) {
+          selectedUserId = await vscode.window.showInputBox({
+            prompt: t('messages.yougile.setup.userIdPrompt'),
+            ignoreFocusOut: true,
+            validateInput: (value) => (value?.trim() ? null : t('messages.yougile.setup.userIdValidation')),
+          });
+        }
+        if (!selectedUserId?.trim()) {
+          return;
+        }
+        await saveYouGileAuthSetup({
+          apiKey: keyData.key,
+          userKey: userKey.trim(),
+          companyId: picked.company.id,
+          userId: selectedUserId.trim(),
+        });
+        provider.refresh();
+        void vscode.window.showInformationMessage(
+          t('messages.yougile.setup.success', { company: picked.company.name })
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          t('messages.yougile.setup.failed', {
+            message: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.openYouGileTimeReport', async () => {
+      if (getTaskSource() !== 'yougile') {
+        void vscode.window.showInformationMessage(t('messages.yougile.filter.onlyInYougile'));
+        return;
+      }
+
+      type ModePick = vscode.QuickPickItem & { mode: 'week' | 'custom' };
+      const mode = await vscode.window.showQuickPick<ModePick>(
+        [
+          { label: t('messages.yougile.report.modeWeek'), mode: 'week' },
+          { label: t('messages.yougile.report.modeCustom'), mode: 'custom' },
+        ],
+        { placeHolder: t('messages.yougile.report.pickMode') }
+      );
+      if (!mode) {
+        return;
+      }
+
+      let startDate: Date;
+      let endDate: Date;
+      if (mode.mode === 'week') {
+        const anchorInput = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.report.weekDatePrompt'),
+          placeHolder: 'YYYY-MM-DD',
+          ignoreFocusOut: true,
+        });
+        if (anchorInput === undefined) {
+          return;
+        }
+        const anchor = anchorInput.trim() ? parseIsoDateInput(anchorInput) : new Date();
+        if (!anchor) {
+          void vscode.window.showErrorMessage(t('messages.yougile.report.invalidDate'));
+          return;
+        }
+        startDate = startOfWeekMonday(anchor);
+        endDate = addDays(startDate, 6);
+      } else {
+        const startInput = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.report.startDatePrompt'),
+          placeHolder: 'YYYY-MM-DD',
+          ignoreFocusOut: true,
+        });
+        if (!startInput) {
+          return;
+        }
+        const endInput = await vscode.window.showInputBox({
+          prompt: t('messages.yougile.report.endDatePrompt'),
+          placeHolder: 'YYYY-MM-DD',
+          ignoreFocusOut: true,
+        });
+        if (!endInput) {
+          return;
+        }
+        const parsedStart = parseIsoDateInput(startInput);
+        const parsedEnd = parseIsoDateInput(endInput);
+        if (!parsedStart || !parsedEnd) {
+          void vscode.window.showErrorMessage(t('messages.yougile.report.invalidDate'));
+          return;
+        }
+        if (parsedEnd.getTime() < parsedStart.getTime()) {
+          void vscode.window.showErrorMessage(t('messages.yougile.report.invalidRange'));
+          return;
+        }
+        startDate = parsedStart;
+        endDate = parsedEnd;
+      }
+
+      const dateList: Date[] = [];
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      while (cursor.getTime() <= endDate.getTime()) {
+        dateList.push(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const dateKeys = dateList.map((d) => toDateKey(d));
+      const dateLabels = dateList.map((d) => formatDateLabel(d));
+
+      const source = await getYouGileTaskSourceData();
+      const columnBoardById = new Map(
+        source.columns
+          .filter((column) => column.boardId)
+          .map((column) => [column.id, column.boardId as string])
+      );
+      const boardTaskIds = new Map<string, string[]>();
+      const taskById = new Map(source.tasks.map((task) => [task.id, task]));
+      for (const task of source.tasks) {
+        const boardId = task.columnId ? columnBoardById.get(task.columnId) : undefined;
+        if (!boardId) {
+          continue;
+        }
+        const bucket = boardTaskIds.get(boardId) ?? [];
+        bucket.push(task.id);
+        boardTaskIds.set(boardId, bucket);
+      }
+
+      const perTaskPerDay = new Map<string, Map<string, number>>();
+      const options = getYouGileIntegrationOptions();
+      for (const [boardId, taskIds] of boardTaskIds.entries()) {
+        const hintsTask = taskById.get(taskIds[0]);
+        const result = await getYouGileTimeStatsBatch(boardId, taskIds, {
+          userId: options.assigneeId,
+          companyId: hintsTask ? readCompanyIdFromTask(hintsTask) : undefined,
+        });
+        for (const [taskId, stats] of Object.entries(result.taskStats)) {
+          const byDay = perTaskPerDay.get(taskId) ?? new Map<string, number>();
+          for (const userStats of Object.values(stats.users)) {
+            for (const record of userStats.records) {
+              if (!record.date) {
+                continue;
+              }
+              const dayKey = record.date.slice(0, 10);
+              byDay.set(dayKey, (byDay.get(dayKey) ?? 0) + record.duration);
+            }
+          }
+          perTaskPerDay.set(taskId, byDay);
+        }
+      }
+
+      const rows = source.tasks
+        .map((task) => {
+          const byDay = perTaskPerDay.get(task.id) ?? new Map<string, number>();
+          const secondsByDay = dateKeys.map((key) => byDay.get(key) ?? 0);
+          const totalSeconds = secondsByDay.reduce((sum, value) => sum + value, 0);
+          return { taskTitle: task.title, secondsByDay, totalSeconds };
+        })
+        .filter((row) => row.totalSeconds > 0)
+        .sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+      await openYouGileTimeReportPanel({
+        periodLabel: `${toDateKey(startDate)} — ${toDateKey(endDate)}`,
+        dateLabels,
+        rows,
+      });
     })
   );
 

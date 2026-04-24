@@ -145,7 +145,31 @@ export type TranslationKey =
   | 'messages.yougile.filter.projectCleared'
   | 'messages.yougile.filter.boardApplied'
   | 'messages.yougile.filter.boardCleared'
+  | 'messages.yougile.setup.loginPrompt'
+  | 'messages.yougile.setup.loginValidation'
+  | 'messages.yougile.setup.passwordPrompt'
+  | 'messages.yougile.setup.passwordValidation'
+  | 'messages.yougile.setup.userKeyPrompt'
+  | 'messages.yougile.setup.userKeyValidation'
+  | 'messages.yougile.setup.pickUser'
+  | 'messages.yougile.setup.userIdPrompt'
+  | 'messages.yougile.setup.userIdValidation'
+  | 'messages.yougile.setup.pickCompany'
+  | 'messages.yougile.setup.noCompanies'
+  | 'messages.yougile.setup.companyAdmin'
+  | 'messages.yougile.setup.success'
+  | 'messages.yougile.setup.failed'
+  | 'messages.yougile.report.pickMode'
+  | 'messages.yougile.report.modeWeek'
+  | 'messages.yougile.report.modeCustom'
+  | 'messages.yougile.report.weekDatePrompt'
+  | 'messages.yougile.report.startDatePrompt'
+  | 'messages.yougile.report.endDatePrompt'
+  | 'messages.yougile.report.invalidDate'
+  | 'messages.yougile.report.invalidRange'
   | 'commands.openYougileTaskDetails.title'
+  | 'commands.setupYouGileAuth.title'
+  | 'commands.openYouGileTimeReport.title'
   | 'yougile.detail.subtitle'
   | 'yougile.detail.mainInfo'
   | 'yougile.detail.status'
@@ -183,6 +207,7 @@ export type TranslationKey =
   | 'yougile.detail.debugEndpoint'
   | 'yougile.detail.debugError'
   | 'yougile.detail.debugRequestBody'
+  | 'yougile.detail.debugResponseBody'
   | 'yougile.detail.sticker'
   | 'yougile.detail.unknownSticker'
   | 'yougile.detail.stickerId'
@@ -364,7 +389,31 @@ const en: Translations = {
   'messages.yougile.filter.projectCleared': 'YouGile project filter cleared.',
   'messages.yougile.filter.boardApplied': 'YouGile board filter applied: {board}.',
   'messages.yougile.filter.boardCleared': 'YouGile board filter cleared.',
+  'messages.yougile.setup.loginPrompt': 'YouGile login (email).',
+  'messages.yougile.setup.loginValidation': 'Login is required.',
+  'messages.yougile.setup.passwordPrompt': 'YouGile password.',
+  'messages.yougile.setup.passwordValidation': 'Password is required.',
+  'messages.yougile.setup.userKeyPrompt': 'YouGile user_key for time tracking endpoint.',
+  'messages.yougile.setup.userKeyValidation': 'user_key is required.',
+  'messages.yougile.setup.pickUser': 'Select YouGile user for time tracking.',
+  'messages.yougile.setup.userIdPrompt': 'YouGile user ID for time tracking requests.',
+  'messages.yougile.setup.userIdValidation': 'User ID is required.',
+  'messages.yougile.setup.pickCompany': 'Select YouGile company for this workspace.',
+  'messages.yougile.setup.noCompanies': 'No available companies were returned by YouGile auth API.',
+  'messages.yougile.setup.companyAdmin': 'Admin access',
+  'messages.yougile.setup.success': 'YouGile auth configured for company: {company}.',
+  'messages.yougile.setup.failed': 'YouGile setup failed: {message}',
+  'messages.yougile.report.pickMode': 'Select report mode',
+  'messages.yougile.report.modeWeek': 'Week report',
+  'messages.yougile.report.modeCustom': 'Custom date range report',
+  'messages.yougile.report.weekDatePrompt': 'Any date of the week (YYYY-MM-DD). Leave empty for current week.',
+  'messages.yougile.report.startDatePrompt': 'Report start date (YYYY-MM-DD).',
+  'messages.yougile.report.endDatePrompt': 'Report end date (YYYY-MM-DD).',
+  'messages.yougile.report.invalidDate': 'Invalid date. Use YYYY-MM-DD.',
+  'messages.yougile.report.invalidRange': 'End date must be greater than or equal to start date.',
   'commands.openYougileTaskDetails.title': 'Open YouGile Task Details',
+  'commands.setupYouGileAuth.title': 'Setup YouGile Auth',
+  'commands.openYouGileTimeReport.title': 'Open YouGile Time Report',
   'yougile.detail.subtitle': 'Read-only task card from YouGile API',
   'yougile.detail.mainInfo': 'Main info',
   'yougile.detail.status': 'Status',
@@ -402,6 +451,7 @@ const en: Translations = {
   'yougile.detail.debugEndpoint': 'Endpoint',
   'yougile.detail.debugError': 'Error',
   'yougile.detail.debugRequestBody': 'Request body',
+  'yougile.detail.debugResponseBody': 'Response body',
   'yougile.detail.sticker': 'Sticker',
   'yougile.detail.unknownSticker': 'Unknown sticker',
   'yougile.detail.stickerId': 'Sticker ID',
@@ -583,7 +633,31 @@ const ru: Translations = {
   'messages.yougile.filter.projectCleared': 'Фильтр YouGile по проекту сброшен.',
   'messages.yougile.filter.boardApplied': 'Фильтр YouGile по доске применён: {board}.',
   'messages.yougile.filter.boardCleared': 'Фильтр YouGile по доске сброшен.',
+  'messages.yougile.setup.loginPrompt': 'Логин YouGile (email).',
+  'messages.yougile.setup.loginValidation': 'Логин обязателен.',
+  'messages.yougile.setup.passwordPrompt': 'Пароль YouGile.',
+  'messages.yougile.setup.passwordValidation': 'Пароль обязателен.',
+  'messages.yougile.setup.userKeyPrompt': 'Вставь user_key YouGile для endpoint таймтрекинга.',
+  'messages.yougile.setup.userKeyValidation': 'user_key обязателен.',
+  'messages.yougile.setup.pickUser': 'Выбери пользователя YouGile для таймтрекинга.',
+  'messages.yougile.setup.userIdPrompt': 'ID пользователя YouGile для запросов таймтрекинга.',
+  'messages.yougile.setup.userIdValidation': 'ID пользователя обязателен.',
+  'messages.yougile.setup.pickCompany': 'Выбери компанию YouGile для этого workspace.',
+  'messages.yougile.setup.noCompanies': 'API авторизации YouGile не вернул доступных компаний.',
+  'messages.yougile.setup.companyAdmin': 'Доступ администратора',
+  'messages.yougile.setup.success': 'Авторизация YouGile настроена для компании: {company}.',
+  'messages.yougile.setup.failed': 'Ошибка настройки YouGile: {message}',
+  'messages.yougile.report.pickMode': 'Выбери режим отчета',
+  'messages.yougile.report.modeWeek': 'Отчет за неделю',
+  'messages.yougile.report.modeCustom': 'Отчет за произвольный период',
+  'messages.yougile.report.weekDatePrompt': 'Любая дата недели (YYYY-MM-DD). Пусто = текущая неделя.',
+  'messages.yougile.report.startDatePrompt': 'Дата начала отчета (YYYY-MM-DD).',
+  'messages.yougile.report.endDatePrompt': 'Дата окончания отчета (YYYY-MM-DD).',
+  'messages.yougile.report.invalidDate': 'Некорректная дата. Используй формат YYYY-MM-DD.',
+  'messages.yougile.report.invalidRange': 'Дата окончания должна быть не раньше даты начала.',
   'commands.openYougileTaskDetails.title': 'Открыть детали задачи YouGile',
+  'commands.setupYouGileAuth.title': 'Настроить авторизацию YouGile',
+  'commands.openYouGileTimeReport.title': 'Открыть отчет по времени YouGile',
   'yougile.detail.subtitle': 'Карточка задачи только для чтения из YouGile API',
   'yougile.detail.mainInfo': 'Основная информация',
   'yougile.detail.status': 'Статус',
@@ -621,6 +695,7 @@ const ru: Translations = {
   'yougile.detail.debugEndpoint': 'Endpoint',
   'yougile.detail.debugError': 'Ошибка',
   'yougile.detail.debugRequestBody': 'Тело запроса',
+  'yougile.detail.debugResponseBody': 'Тело ответа',
   'yougile.detail.sticker': 'Стикер',
   'yougile.detail.unknownSticker': 'Неизвестный стикер',
   'yougile.detail.stickerId': 'ID стикера',

@@ -57,6 +57,10 @@ function formatDuration(seconds: number): string {
   return `${secs}s`;
 }
 
+function secondsToHours(seconds: number): number {
+  return Math.round((seconds / 3600) * 100) / 100;
+}
+
 function toPrettyJson(value: unknown): string {
   if (value === undefined) {
     return '';
@@ -233,12 +237,12 @@ function renderStickersSection(
   `;
 }
 
-function renderTimeTrackingSection(timeTracking: unknown): string {
+function renderTimeTrackingSection(timeTracking: unknown, taskTimeStats?: YouGileTaskTimeStats): string {
   const value =
     timeTracking && typeof timeTracking === 'object' && !Array.isArray(timeTracking)
       ? (timeTracking as Record<string, unknown>)
       : null;
-  if (!value) {
+  if (!value && !taskTimeStats) {
     return `
       <section class="card">
         <h2>${escapeHtml(t('yougile.detail.timeTracking'))}</h2>
@@ -247,8 +251,13 @@ function renderTimeTrackingSection(timeTracking: unknown): string {
     `;
   }
 
-  const plan = typeof value.plan === 'number' ? value.plan : undefined;
-  const work = typeof value.work === 'number' ? value.work : undefined;
+  const plan = typeof value?.plan === 'number' ? value.plan : undefined;
+  const workFromTimeTracking = typeof value?.work === 'number' ? value.work : undefined;
+  const workFromActual = typeof taskTimeStats?.totalSpentTime === 'number'
+    ? secondsToHours(taskTimeStats.totalSpentTime)
+    : undefined;
+  // Fact time from extension endpoint is more reliable than task.timeTracking.work.
+  const work = workFromActual ?? workFromTimeTracking;
   const delta =
     typeof plan === 'number' && typeof work === 'number' ? work - plan : undefined;
 
@@ -352,6 +361,7 @@ function renderTimeTrackingDebugSection(debug?: YouGileTimeStatsDebug): string {
     return '';
   }
   const requestPayload = debug.requestPayload ? toPrettyJson(debug.requestPayload) : '';
+  const responseBody = debug.responseBody !== undefined ? toPrettyJson(debug.responseBody) : '';
   const statusText = debug.skipped
     ? `${t('yougile.detail.debugStatusSkipped')}${debug.reason ? `: ${debug.reason}` : ''}`
     : `${t('yougile.detail.debugStatusSent')}${debug.responseResult ? ` (${debug.responseResult})` : ''}`;
@@ -378,6 +388,12 @@ function renderTimeTrackingDebugSection(debug?: YouGileTimeStatsDebug): string {
              <pre>${escapeHtml(requestPayload)}</pre>`
           : ''
       }
+      ${
+        responseBody
+          ? `<div class="meta-label" style="margin-top:8px;">${escapeHtml(t('yougile.detail.debugResponseBody'))}</div>
+             <pre>${escapeHtml(responseBody)}</pre>`
+          : ''
+      }
     </section>
   `;
 }
@@ -392,9 +408,11 @@ function buildHtml(
   liveTimer?: YouGileLiveTimer,
   timeDebug?: YouGileTimeStatsDebug
 ): string {
-  const showRawPayload = vscode.workspace
-    .getConfiguration('cursorTaskChats')
-    .get<boolean>('yougile.showRawPayloadInDetails') ?? true;
+  const config = vscode.workspace.getConfiguration('cursorTaskChats');
+  const showDebugPanels =
+    config.get<boolean>('yougile.showDebugPanels') ??
+    config.get<boolean>('yougile.showRawPayloadInDetails') ??
+    false;
   const description = task.description?.trim() ?? '';
   const descriptionHtml = description ? sanitizeHtml(description) : '';
   const stickers = (task.raw as Record<string, unknown>).stickers;
@@ -452,11 +470,11 @@ function buildHtml(
 
     ${renderStickersSection(stickers, stickersById)}
     ${renderJsonSection(t('yougile.detail.deadline'), deadline, t('yougile.detail.emptyDeadline'))}
-    ${renderTimeTrackingSection(timeTracking)}
+    ${renderTimeTrackingSection(timeTracking, taskTimeStats)}
     ${renderActualTimeSection(usersById, taskTimeStats, liveTimer)}
-    ${renderTimeTrackingDebugSection(timeDebug)}
+    ${showDebugPanels ? renderTimeTrackingDebugSection(timeDebug) : ''}
     ${renderJsonSection(t('yougile.detail.checklists'), checklists, t('yougile.detail.emptyChecklists'))}
-    ${showRawPayload ? renderJsonSection(t('yougile.detail.raw'), task.raw, t('yougile.detail.emptyRaw')) : ''}
+    ${showDebugPanels ? renderJsonSection(t('yougile.detail.raw'), task.raw, t('yougile.detail.emptyRaw')) : ''}
   </div>
 </body>
 </html>`;

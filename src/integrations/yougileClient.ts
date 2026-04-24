@@ -1,4 +1,6 @@
 import * as https from 'https';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 
@@ -95,6 +97,7 @@ export interface YouGileTimeStatsDebug {
   requestUrl: string;
   requestPayload?: Record<string, unknown>;
   responseResult?: string;
+  responseBody?: unknown;
   error?: string;
 }
 
@@ -102,6 +105,12 @@ export interface YouGileTimeStatsBatchResult {
   taskStats: Record<string, YouGileTaskTimeStats>;
   liveTimers: YouGileLiveTimer[];
   debug: YouGileTimeStatsDebug;
+}
+
+export interface YouGileAuthCompany {
+  id: string;
+  name: string;
+  isAdmin?: boolean;
 }
 
 export type YouGileTaskSourceData = {
@@ -170,16 +179,6 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function maskSecret(value?: string): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  if (value.length <= 10) {
-    return '***';
-  }
-  return `${value.slice(0, 6)}***${value.slice(-4)}`;
 }
 
 function toBoolean(value: unknown): boolean | undefined {
@@ -530,10 +529,18 @@ export function getTaskSource(): 'local' | 'yougile' {
 
 export function getYouGileConfig(): { apiBaseUrl: string; apiKey: string } {
   const config = vscode.workspace.getConfiguration('cursorTaskChats');
+  const rawApiBase =
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.apiBaseUrl') ??
+    config.get<string>('yougile.apiBaseUrl') ??
+    DEFAULT_API_BASE_URL;
+  const rawApiKey =
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.apiKey') ??
+    config.get<string>('yougile.apiKey') ??
+    '';
   const apiBaseUrl = normalizeBaseUrl(
-    config.get<string>('yougile.apiBaseUrl') ?? DEFAULT_API_BASE_URL
+    String(rawApiBase)
   );
-  const apiKey = config.get<string>('yougile.apiKey')?.trim() ?? '';
+  const apiKey = String(rawApiKey).trim();
   return { apiBaseUrl, apiKey };
 }
 
@@ -557,13 +564,56 @@ export function getYouGileIntegrationOptions(): YouGileIntegrationOptions {
 
 export function getYouGileExtensionConfig(): YouGileExtensionConfig {
   const config = vscode.workspace.getConfiguration('cursorTaskChats');
-  const userKey = config.get<string>('yougile.extension.userKey')?.trim() || undefined;
-  const userId = config.get<string>('yougile.extension.userId')?.trim() || undefined;
-  const companyId = config.get<string>('yougile.extension.companyId')?.trim() || undefined;
-  const appVersion = config.get<string>('yougile.extension.appVersion')?.trim() || '40.45.1';
-  const clientType = config.get<string>('yougile.extension.clientType')?.trim() || 'web';
-  const v = config.get<number>('yougile.extension.apiVersion') ?? 9;
+  const userKey = (
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.userKey') ??
+    config.get<string>('yougile.extension.userKey')
+  )?.toString().trim() || undefined;
+  const userId = (
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.userId') ??
+    config.get<string>('yougile.extension.userId')
+  )?.toString().trim() || undefined;
+  const companyId = (
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.companyId') ??
+    config.get<string>('yougile.extension.companyId')
+  )?.toString().trim() || undefined;
+  const appVersion = (
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.appVersion') ??
+    config.get<string>('yougile.extension.appVersion') ??
+    '40.45.1'
+  ).toString().trim() || '40.45.1';
+  const clientType = (
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.clientType') ??
+    config.get<string>('yougile.extension.clientType') ??
+    'web'
+  ).toString().trim() || 'web';
+  const rawVersion =
+    getWorkspaceSettingRaw('cursorTaskChats.yougile.extension.apiVersion') ??
+    config.get<number>('yougile.extension.apiVersion') ??
+    9;
+  const v = typeof rawVersion === 'number' ? rawVersion : Number(rawVersion) || 9;
   return { userKey, userId, companyId, appVersion, clientType, v };
+}
+
+function getWorkspaceSettingRaw(key: string): string | number | boolean | undefined {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    return undefined;
+  }
+  const settingsPath = path.join(folder.uri.fsPath, '.vscode', 'settings.json');
+  try {
+    if (!fs.existsSync(settingsPath)) {
+      return undefined;
+    }
+    const text = fs.readFileSync(settingsPath, 'utf8');
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const value = parsed[key];
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function extractColumnArray(payload: unknown): unknown[] {
@@ -647,6 +697,23 @@ function extractStickerArray(payload: unknown): unknown[] {
     return [];
   }
   const candidates = [envelope.content, envelope.items, envelope.data, envelope.stickers];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+  return [];
+}
+
+function extractGenericContentArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  const envelope = asRecord(payload) as YouGileListEnvelope | null;
+  if (!envelope) {
+    return [];
+  }
+  const candidates = [envelope.content, envelope.items, envelope.data];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
       return candidate;
@@ -777,6 +844,15 @@ export async function getYouGileUsers(): Promise<YouGileUser[]> {
   return extractUserArray(payload)
     .map((entry) => parseUser(entry))
     .filter((entry): entry is YouGileUser => Boolean(entry));
+}
+
+export async function getYouGileUsersByApiKey(apiKey: string, apiBaseUrl?: string): Promise<YouGileUser[]> {
+  const baseUrl = normalizeBaseUrl(apiBaseUrl ?? getYouGileConfig().apiBaseUrl);
+  const payload = await requestJson<unknown>(new URL('users', `${baseUrl}/`), apiKey);
+  return extractUserArray(payload)
+    .map((entry) => parseUser(entry))
+    .filter((entry): entry is YouGileUser => Boolean(entry))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 export async function getYouGileColumns(): Promise<YouGileColumn[]> {
@@ -917,6 +993,110 @@ function parseLiveTimer(raw: unknown): YouGileLiveTimer | null {
   };
 }
 
+function parseAuthCompany(raw: unknown): YouGileAuthCompany | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const id = asString(entry.id) ?? asString(entry.companyId);
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    name: asString(entry.name) ?? id,
+    isAdmin: toBoolean(entry.isAdmin),
+  };
+}
+
+function parseApiKeyEntry(raw: unknown): { key: string; deleted: boolean; timestamp?: number; userId?: string } | null {
+  const entry = asRecord(raw);
+  if (!entry) {
+    return null;
+  }
+  const key = asString(entry.key);
+  if (!key) {
+    return null;
+  }
+  const deleted = toBoolean(entry.deleted) ?? false;
+  const timestampText = asString(entry.timestamp);
+  const timestamp = timestampText ? Number(timestampText) : asNumber(entry.timestamp);
+  const userId = asString(entry.userId) ?? asString(entry.idUser);
+  return { key, deleted, timestamp: Number.isFinite(timestamp ?? NaN) ? timestamp : undefined, userId };
+}
+
+function getAuthBaseUrl(apiBaseUrl: string): string {
+  const normalized = normalizeBaseUrl(apiBaseUrl);
+  if (normalized.endsWith('/api-v2')) {
+    return normalized;
+  }
+  return `${normalized}/api-v2`;
+}
+
+async function postAuthJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const { apiBaseUrl } = getYouGileConfig();
+  const authBase = getAuthBaseUrl(apiBaseUrl);
+  return requestJsonWithOptions<T>(new URL(path, `${authBase}/`), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getYouGileAuthCompanies(login: string, password: string): Promise<YouGileAuthCompany[]> {
+  const payload = await postAuthJson<unknown>('auth/companies', { login, password });
+  return extractGenericContentArray(payload)
+    .map((entry) => parseAuthCompany(entry))
+    .filter((entry): entry is YouGileAuthCompany => Boolean(entry));
+}
+
+export async function resolveYouGileApiKey(
+  login: string,
+  password: string,
+  companyId: string
+): Promise<{ key: string; userId?: string }> {
+  const listPayload = await postAuthJson<unknown>('auth/keys/get', { login, password, companyId });
+  const parsedKeys = extractGenericContentArray(listPayload)
+    .map((entry) => parseApiKeyEntry(entry))
+    .filter((entry): entry is { key: string; deleted: boolean; timestamp?: number; userId?: string } => Boolean(entry))
+    .filter((entry) => !entry.deleted)
+    .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+  const picked = parsedKeys[0];
+  if (picked) {
+    return { key: picked.key, userId: picked.userId };
+  }
+
+  const created = await postAuthJson<unknown>('auth/keys', { login, password, companyId });
+  const createdEntry = asRecord(created);
+  const key = asString(createdEntry?.key);
+  if (!key) {
+    throw new Error('YouGile auth key was not returned by auth/keys endpoint');
+  }
+  return { key };
+}
+
+export async function saveYouGileAuthSetup(options: {
+  apiKey: string;
+  userKey?: string;
+  companyId: string;
+  userId?: string;
+}): Promise<void> {
+  await writeWorkspaceSetting('cursorTaskChats.integration.source', 'yougile');
+  await writeWorkspaceSetting('cursorTaskChats.yougile.apiKey', options.apiKey);
+  if (options.userKey?.trim()) {
+    await writeWorkspaceSetting('cursorTaskChats.yougile.extension.userKey', options.userKey.trim());
+  }
+  await writeWorkspaceSetting('cursorTaskChats.yougile.extension.companyId', options.companyId);
+  if (options.userId?.trim()) {
+    await writeWorkspaceSetting('cursorTaskChats.yougile.extension.userId', options.userId.trim());
+    await writeWorkspaceSetting('cursorTaskChats.yougile.assigneeId', options.userId.trim());
+    setRuntimeFilterOverride('assigneeId', options.userId.trim());
+  }
+}
+
 export async function getYouGileTimeStatsBatch(
   boardId: string,
   taskIds: string[],
@@ -954,7 +1134,7 @@ export async function getYouGileTimeStatsBatch(
         requestUrl,
         requestPayload: {
           userId: resolvedUserId,
-          key: maskSecret(extensionConfig.userKey),
+          key: extensionConfig.userKey,
           companyId: resolvedCompanyId,
           extension: 'timetracking',
           prop: 'getBatchData',
@@ -997,7 +1177,7 @@ export async function getYouGileTimeStatsBatch(
         requestUrl,
         requestPayload: {
           ...payload,
-          key: maskSecret(extensionConfig.userKey),
+          key: extensionConfig.userKey,
         },
         error: error instanceof Error ? error.message : String(error),
       },
@@ -1028,9 +1208,10 @@ export async function getYouGileTimeStatsBatch(
       requestUrl,
       requestPayload: {
         ...payload,
-        key: maskSecret(extensionConfig.userKey),
+        key: extensionConfig.userKey,
       },
       responseResult: asString(root?.result),
+      responseBody: root,
     },
   };
 }

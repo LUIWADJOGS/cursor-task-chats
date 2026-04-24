@@ -1,0 +1,53 @@
+POST https://yougile.com/data/extension/exec
+Content-Type: application/json
+referer: https://yougile.com/
+
+{
+  "userId": "d52f117e-3565-45a6-800e-077c9825fbd1",
+  "companyId": "69292992-512a-4974-949e-720a4643406e",
+  "key": "1777015777275_f4ec364331a44324f93ec6d0014029f3c25e46ff6524a06e07bc7c39074341f4",
+  "extension": "timetracking",
+  "prop": "getBatchData",
+  "args": [
+    {
+      "boardId": "4397a463-07cf-4674-9568-867e55807d17",
+      "userId": "d52f117e-3565-45a6-800e-077c9825fbd1",
+      "taskIds": [
+        "0e101b41-b139-4605-9d06-36a3509493a0"
+      ]
+    }
+  ], 
+  "v": 9,
+  "appVersion": "40.45.1",
+  "clientType": "web"
+}
+
+###
+POST https://ru.yougile.com/api-v2/auth/companies 
+Content-Type: application/json
+
+{
+  "login": "luiwadjogs@gmail.com",
+  "password": "qazWSX12!@"
+}
+
+####
+
+
+POST https://ru.yougile.com/api-v2/auth/keys/get 
+Content-Type: application/json
+
+{
+  "login": "luiwadjogs@gmail.com",
+  "password": "qazWSX12!@",
+  "companyId": "7a11ea2c-43e3-4950-b3a4-0b9d351a0f19"
+}
+
+POST https://ru.yougile.com/api-v2/auth/keys 
+Content-Type: application/json
+
+{
+  "login": "luiwadjogs@gmail.com",
+  "password": "qazWSX12!@",
+  "companyId": "7a11ea2c-43e3-4950-b3a4-0b9d351a0f19"
+}
