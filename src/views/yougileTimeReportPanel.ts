@@ -13,6 +13,10 @@ type OpenYouGileTimeReportParams = {
   periodLabel: string;
   dateLabels: string[];
   rows: YouGileTimeReportRow[];
+  lowDayThresholdSeconds: number;
+  lowDayCellColor: string;
+  overEstimateRowColor: string;
+  intersectionCellColor: string;
 };
 
 function escapeHtml(s: string): string {
@@ -36,6 +40,17 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
+function sanitizeCssColor(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const isHex = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed);
+  const isFunctional = /^(rgb|rgba|hsl|hsla)\([^)]+\)$/.test(trimmed);
+  const isVar = /^var\(--[A-Za-z0-9_-]+\)$/.test(trimmed);
+  return isHex || isFunctional || isVar ? trimmed : fallback;
+}
+
 export async function openYouGileTimeReportPanel(params: OpenYouGileTimeReportParams): Promise<void> {
   const panel = vscode.window.createWebviewPanel(
     'yougileTimeReport',
@@ -43,18 +58,29 @@ export async function openYouGileTimeReportPanel(params: OpenYouGileTimeReportPa
     vscode.ViewColumn.One,
     { enableScripts: false }
   );
+  const lowDayThresholdSeconds = Math.max(0, params.lowDayThresholdSeconds || 0);
+  const lowDayCellColor = sanitizeCssColor(params.lowDayCellColor, 'rgba(255, 193, 7, 0.25)');
+  const overEstimateRowColor = sanitizeCssColor(params.overEstimateRowColor, 'rgba(255, 99, 71, 0.20)');
+  const intersectionCellColor = sanitizeCssColor(params.intersectionCellColor, 'rgba(255, 128, 0, 0.35)');
 
   const headerCells = params.dateLabels.map((label) => `<th>${escapeHtml(label)}</th>`).join('');
   const bodyRows = params.rows
     .map((row) => {
+      const overEstimate =
+        row.periodEstimateHours !== undefined && row.periodFactSeconds > row.periodEstimateHours * 3600;
       const cells = row.secondsByDay
-        .map((value) => `<td class="num">${escapeHtml(formatDuration(value))}</td>`)
+        .map((value) => {
+          const lowDayClass = lowDayThresholdSeconds > 0 && value < lowDayThresholdSeconds ? ' low-day' : '';
+          const intersectionClass = overEstimate && lowDayClass ? ' intersection' : '';
+          return `<td class="num${lowDayClass}${intersectionClass}">${escapeHtml(formatDuration(value))}</td>`;
+        })
         .join('');
       const periodEstimate = row.periodEstimateHours !== undefined ? `${row.periodEstimateHours}h` : '—';
       const totalCell = `${formatDuration(row.periodFactSeconds)} / ${formatDuration(
         row.overallFactSeconds
       )} / ${periodEstimate}`;
-      return `<tr><td class="task">${escapeHtml(row.taskTitle)}</td>${cells}<td class="num total">${totalCell}</td></tr>`;
+      const rowClass = overEstimate ? ' class="over-estimate"' : '';
+      return `<tr${rowClass}><td class="task">${escapeHtml(row.taskTitle)}</td>${cells}<td class="num total">${totalCell}</td></tr>`;
     })
     .join('');
   const dayTotals = params.dateLabels.map((_, dayIndex) =>
@@ -80,6 +106,11 @@ export async function openYouGileTimeReportPanel(params: OpenYouGileTimeReportPa
 <head>
   <meta charset="UTF-8">
   <style>
+    :root {
+      --cursor-task-chats-low-day-cell-color: ${lowDayCellColor};
+      --cursor-task-chats-over-estimate-row-color: ${overEstimateRowColor};
+      --cursor-task-chats-intersection-cell-color: ${intersectionCellColor};
+    }
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px; }
     .card { border: 1px solid var(--vscode-widget-border, transparent); border-radius: 8px; padding: 12px; background: var(--vscode-sideBar-background); }
     .period { color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
@@ -92,6 +123,9 @@ export async function openYouGileTimeReportPanel(params: OpenYouGileTimeReportPa
     .num { text-align: right; }
     .total { font-weight: 600; }
     .total-row td { background: var(--vscode-editorWidget-background, rgba(127,127,127,.1)); }
+    td.low-day { background: var(--cursor-task-chats-low-day-cell-color); }
+    tr.over-estimate td { background: var(--cursor-task-chats-over-estimate-row-color); }
+    tr.over-estimate td.intersection { background: var(--cursor-task-chats-intersection-cell-color); }
   </style>
 </head>
 <body>

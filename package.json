@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.29",
+  "version": "1.1.32",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -219,6 +219,27 @@
             "type": "boolean",
             "default": false,
             "description": "%config.yougile.showDebugPanels.description%"
+          },
+          "cursorTaskChats.yougile.report.lowDayThresholdHours": {
+            "type": "number",
+            "default": 6,
+            "minimum": 0,
+            "description": "%config.yougile.report.lowDayThresholdHours.description%"
+          },
+          "cursorTaskChats.yougile.report.lowDayCellColor": {
+            "type": "string",
+            "default": "rgba(255, 193, 7, 0.25)",
+            "description": "%config.yougile.report.lowDayCellColor.description%"
+          },
+          "cursorTaskChats.yougile.report.overEstimateRowColor": {
+            "type": "string",
+            "default": "rgba(255, 99, 71, 0.20)",
+            "description": "%config.yougile.report.overEstimateRowColor.description%"
+          },
+          "cursorTaskChats.yougile.report.intersectionCellColor": {
+            "type": "string",
+            "default": "rgba(255, 128, 0, 0.35)",
+            "description": "%config.yougile.report.intersectionCellColor.description%"
           }
         }
       }

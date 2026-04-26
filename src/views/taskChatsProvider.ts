@@ -184,7 +184,8 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
   constructor(
     public readonly task: YouGileTask,
     childCount: number,
-    totalSpentSeconds?: number
+    totalSpentSeconds?: number,
+    private readonly isSubtask = false
   ) {
     super(
       task.title,
@@ -193,7 +194,7 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
     this.contextValue = 'yougileTask';
     const timePart = typeof totalSpentSeconds === 'number' ? ` · ${formatSpentTime(totalSpentSeconds)}` : '';
     this.description = `${getYouGileStatusLabel(task)}${timePart}`;
-    this.iconPath = new vscode.ThemeIcon(task.completed ? 'pass' : 'checklist');
+    this.iconPath = new vscode.ThemeIcon(this.isSubtask ? 'list-tree' : 'checklist');
     this.command = {
       command: 'cursorTaskChats.openYouGileTaskDetails',
       title: t('commands.openYougileTaskDetails.title'),
@@ -487,7 +488,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         .map((task) => {
           const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
           const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
-          return new YouGileTaskTreeItem(task, childCount, total);
+          return new YouGileTaskTreeItem(task, childCount, total, false);
         });
     }
 
@@ -496,7 +497,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       return children.map((task) => {
         const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
         const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
-        return new YouGileTaskTreeItem(task, childCount, total);
+        return new YouGileTaskTreeItem(task, childCount, total, true);
       });
     }
 
@@ -930,6 +931,20 @@ export function registerTaskTreeCommands(
       const dateLabels = dateList.map((d) => formatDateLabel(d));
 
       const extensionConfig = getYouGileExtensionConfig();
+      const reportConfig = vscode.workspace.getConfiguration('cursorTaskChats');
+      const lowDayThresholdHours = Math.max(
+        0,
+        Number(reportConfig.get<number>('yougile.report.lowDayThresholdHours') ?? 0) || 0
+      );
+      const lowDayCellColor =
+        (reportConfig.get<string>('yougile.report.lowDayCellColor') ?? '').trim() ||
+        'rgba(255, 193, 7, 0.25)';
+      const overEstimateRowColor =
+        (reportConfig.get<string>('yougile.report.overEstimateRowColor') ?? '').trim() ||
+        'rgba(255, 99, 71, 0.20)';
+      const intersectionCellColor =
+        (reportConfig.get<string>('yougile.report.intersectionCellColor') ?? '').trim() ||
+        'rgba(255, 128, 0, 0.35)';
       const options = getYouGileIntegrationOptions();
       const defaultReportUserId = extensionConfig.userId ?? options.assigneeId;
       const users = await getYouGileUsers();
@@ -1027,6 +1042,10 @@ export function registerTaskTreeCommands(
         periodLabel: `${toDateKey(startDate)} — ${toDateKey(endDate)}`,
         dateLabels,
         rows,
+        lowDayThresholdSeconds: lowDayThresholdHours * 3600,
+        lowDayCellColor,
+        overEstimateRowColor,
+        intersectionCellColor,
       });
     })
   );
