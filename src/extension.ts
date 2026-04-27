@@ -3,7 +3,7 @@ import { getCurrentBranch, getHeadCommit } from './git/getCurrentBranch';
 import { GitContentProvider, GIT_CONTENT_SCHEME } from './git/gitContentProvider';
 import { openPromptInCursor } from './chat/createPromptDeeplink';
 import { openTaskRepository, flushAllTaskRepositories } from './db/taskRepository';
-import { TaskChatsProvider, TaskTreeItem, registerTaskTreeCommands } from './views/taskChatsProvider';
+import { TaskChatsProvider, TaskTreeItem, YouGileTaskTreeItem, registerTaskTreeCommands } from './views/taskChatsProvider';
 import { registerGitBranchWatcher } from './watchers/gitBranchWatcher';
 import { t, taskStatusLabel } from './i18n';
 import {
@@ -17,6 +17,7 @@ import {
 } from './cursor/composerStorage';
 import { openComposerWithCursorCommand } from './cursor/openComposer';
 import { buildPromptTextForTask } from './tasks/taskPromptContext';
+import { ensureLinkedLocalTaskForYouGileTask } from './tasks/yougileTaskLinking';
 import type { TaskEntity } from './types/taskManager';
 
 async function pickTaskFromBranch(
@@ -176,7 +177,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('cursorTaskChats.openTaskChat', async (item?: TaskTreeItem) => {
+    vscode.commands.registerCommand(
+      'cursorTaskChats.openTaskChat',
+      async (item?: TaskTreeItem | YouGileTaskTreeItem) => {
       const folder = getWorkspaceFolder();
       if (!folder) {
         void vscode.window.showWarningMessage(t('messages.noWorkspace'));
@@ -184,7 +187,16 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const repo = await openTaskRepository(context, folder);
       const branch = await getCurrentBranch(folder);
-      let task = item?.task;
+      let task = item instanceof TaskTreeItem ? item.task : undefined;
+      if (!task && item instanceof YouGileTaskTreeItem) {
+        const linked = await ensureLinkedLocalTaskForYouGileTask(context, folder, item.task);
+        task = linked.task;
+        if (linked.created) {
+          void vscode.window.showInformationMessage(
+            t('messages.yougile.link.created', { task: task.title, branch: task.branchName })
+          );
+        }
+      }
       if (!task) {
         task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
       }
@@ -214,11 +226,14 @@ export function activate(context: vscode.ExtensionContext): void {
         cachedName: composer.name,
       });
       provider.refresh();
-    })
+      }
+    )
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('cursorTaskChats.attachCurrentChatToTask', async () => {
+    vscode.commands.registerCommand(
+      'cursorTaskChats.attachCurrentChatToTask',
+      async (item?: TaskTreeItem | YouGileTaskTreeItem) => {
       const folder = getWorkspaceFolder();
       if (!folder) {
         void vscode.window.showWarningMessage(t('messages.noWorkspace'));
@@ -226,7 +241,19 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const repo = await openTaskRepository(context, folder);
       const branch = await getCurrentBranch(folder);
-      const task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
+      let task = item instanceof TaskTreeItem ? item.task : undefined;
+      if (!task && item instanceof YouGileTaskTreeItem) {
+        const linked = await ensureLinkedLocalTaskForYouGileTask(context, folder, item.task);
+        task = linked.task;
+        if (linked.created) {
+          void vscode.window.showInformationMessage(
+            t('messages.yougile.link.created', { task: task.title, branch: task.branchName })
+          );
+        }
+      }
+      if (!task) {
+        task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
+      }
       if (!task) {
         return;
       }
@@ -311,7 +338,8 @@ export function activate(context: vscode.ExtensionContext): void {
           task: task.title,
         })
       );
-    })
+      }
+    )
   );
 
   context.subscriptions.push(

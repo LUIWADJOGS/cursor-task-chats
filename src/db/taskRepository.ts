@@ -12,6 +12,7 @@ import type {
   TaskChecklistItem,
   TaskEntity,
   TaskStatus,
+  YouGileTaskLinkEntity,
 } from '../types/taskManager';
 
 /** Keyed by absolute SQLite path so changing `databaseRelativePath` does not reuse a stale DB handle. */
@@ -70,16 +71,40 @@ function applyInitialSchema(db: Database): void {
       created_at TEXT NOT NULL,
       UNIQUE(task_id, path_relative)
     )`,
+    `CREATE TABLE IF NOT EXISTS yougile_task_links (
+      workspace_folder TEXT NOT NULL,
+      yougile_task_id TEXT NOT NULL,
+      local_task_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(workspace_folder, yougile_task_id)
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_tasks_branch_ws ON tasks(branch_name, workspace_folder)`,
     `CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_chats_task ON task_chats(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_checklist_task ON task_checklist_items(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_attach_task ON task_attachments(task_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_yougile_links_local_task ON yougile_task_links(local_task_id)`,
   ];
   for (const sql of statements) {
     db.run(sql);
   }
-  db.run('PRAGMA user_version = 1');
+  db.run('PRAGMA user_version = 2');
+}
+
+function applySchemaV2(db: Database): void {
+  db.run(
+    `CREATE TABLE IF NOT EXISTS yougile_task_links (
+      workspace_folder TEXT NOT NULL,
+      yougile_task_id TEXT NOT NULL,
+      local_task_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(workspace_folder, yougile_task_id)
+    )`
+  );
+  db.run('CREATE INDEX IF NOT EXISTS idx_yougile_links_local_task ON yougile_task_links(local_task_id)');
+  db.run('PRAGMA user_version = 2');
 }
 
 function persistDb(db: Database, dbPath: string): void {
@@ -142,6 +167,16 @@ function rowAttachment(r: Record<string, unknown>): TaskAttachmentEntity {
   };
 }
 
+function rowYouGileTaskLink(r: Record<string, unknown>): YouGileTaskLinkEntity {
+  return {
+    workspaceFolder: String(r.workspace_folder),
+    yougileTaskId: String(r.yougile_task_id),
+    localTaskId: String(r.local_task_id),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  };
+}
+
 export async function openTaskRepository(
   context: vscode.ExtensionContext,
   workspaceFolder: vscode.WorkspaceFolder
@@ -161,8 +196,11 @@ export async function openTaskRepository(
     db = new SQL.Database();
   }
 
-  if (getUserVersion(db) < 1) {
+  const userVersion = getUserVersion(db);
+  if (userVersion < 1) {
     applyInitialSchema(db);
+  } else if (userVersion < 2) {
+    applySchemaV2(db);
   }
 
   migrateLegacyJsonIntoDatabaseIfNeeded(db, context, workspaceFolder.uri.fsPath);
@@ -206,6 +244,108 @@ export class TaskRepository {
     }
     stmt.free();
     return out;
+  }
+
+  getYouGileTaskLinkByTaskId(yougileTaskId: string): YouGileTaskLinkEntity | null {
+    const stmt = this.db.prepare(
+      `SELECT * FROM yougile_task_links WHERE workspace_folder = ? AND yougile_task_id = ? LIMIT 1`
+    );
+    stmt.bind([this.workspaceFolderFsPath, yougileTaskId]);
+    if (!stmt.step()) {
+      stmt.free();
+      return null;
+    }
+    const row = rowYouGileTaskLink(stmt.getAsObject());
+    stmt.free();
+    return row;
+  }
+
+  getLinkedLocalTaskByYouGileTaskId(yougileTaskId: string): TaskEntity | null {
+    const link = this.getYouGileTaskLinkByTaskId(yougileTaskId);
+    if (!link) {
+      return null;
+    }
+    return this.getTaskById(link.localTaskId);
+  }
+
+  getLinkedTaskBranchesByYouGileTaskIds(yougileTaskIds: string[]): Map<string, string> {
+    const uniqueIds = Array.from(new Set(yougileTaskIds.map((id) => id.trim()).filter((id) => Boolean(id))));
+    if (uniqueIds.length === 0) {
+      return new Map<string, string>();
+    }
+    const placeholders = uniqueIds.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `SELECT l.yougile_task_id as yougile_task_id, t.branch_name as branch_name
+       FROM yougile_task_links l
+       JOIN tasks t ON t.id = l.local_task_id
+       WHERE l.workspace_folder = ? AND l.yougile_task_id IN (${placeholders}) AND t.workspace_folder = ?`
+    );
+    stmt.bind([this.workspaceFolderFsPath, ...uniqueIds, this.workspaceFolderFsPath]);
+    const out = new Map<string, string>();
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as Record<string, unknown>;
+      const yougileTaskId = typeof row.yougile_task_id === 'string' ? row.yougile_task_id : undefined;
+      const branchName = typeof row.branch_name === 'string' ? row.branch_name : undefined;
+      if (yougileTaskId && branchName) {
+        out.set(yougileTaskId, branchName);
+      }
+    }
+    stmt.free();
+    return out;
+  }
+
+  linkYouGileTaskToLocalTask(yougileTaskId: string, localTaskId: string): YouGileTaskLinkEntity {
+    const now = new Date().toISOString();
+    const existing = this.getYouGileTaskLinkByTaskId(yougileTaskId);
+    if (existing) {
+      this.db.run(
+        `UPDATE yougile_task_links
+         SET local_task_id = ?, updated_at = ?
+         WHERE workspace_folder = ? AND yougile_task_id = ?`,
+        [localTaskId, now, this.workspaceFolderFsPath, yougileTaskId]
+      );
+      this.persist();
+      return {
+        ...existing,
+        localTaskId,
+        updatedAt: now,
+      };
+    }
+    this.db.run(
+      `INSERT INTO yougile_task_links (workspace_folder, yougile_task_id, local_task_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [this.workspaceFolderFsPath, yougileTaskId, localTaskId, now, now]
+    );
+    this.persist();
+    return {
+      workspaceFolder: this.workspaceFolderFsPath,
+      yougileTaskId,
+      localTaskId,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  ensureLinkedLocalTask(input: {
+    yougileTaskId: string;
+    title: string;
+    description?: string;
+    branchName: string;
+    baselineCommitHash?: string;
+  }): { task: TaskEntity; created: boolean } {
+    const existing = this.getLinkedLocalTaskByYouGileTaskId(input.yougileTaskId);
+    if (existing) {
+      return { task: existing, created: false };
+    }
+    const createdTask = this.createTask({
+      workspaceFolder: this.workspaceFolderFsPath,
+      branchName: input.branchName,
+      title: input.title,
+      description: input.description,
+      baselineCommitHash: input.baselineCommitHash,
+    });
+    this.linkYouGileTaskToLocalTask(input.yougileTaskId, createdTask.id);
+    return { task: createdTask, created: true };
   }
 
   getAllChats(): TaskChatEntity[] {

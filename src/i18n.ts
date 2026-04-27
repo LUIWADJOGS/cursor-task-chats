@@ -131,6 +131,8 @@ export type TranslationKey =
   | 'yougile.taskDescription.archived'
   | 'yougile.taskDescription.timerRunning'
   | 'yougile.taskTooltip.taskId'
+  | 'yougile.taskTooltip.linkedBranch'
+  | 'messages.yougile.link.created'
   | 'yougile.apiKeyMissing'
   | 'yougile.requestFailed'
   | 'yougile.invalidJson'
@@ -388,6 +390,9 @@ const en: Translations = {
   'yougile.taskDescription.archived': 'archived',
   'yougile.taskDescription.timerRunning': 'timer running',
   'yougile.taskTooltip.taskId': 'Task ID: {id}',
+  'yougile.taskTooltip.linkedBranch': 'Linked branch: {branch}',
+  'messages.yougile.link.created':
+    'Created local task link for YouGile task "{task}" on branch "{branch}".',
   'yougile.apiKeyMissing':
     'YouGile API key is empty. Set cursorTaskChats.yougile.apiKey in settings.',
   'yougile.requestFailed': 'YouGile API request failed (HTTP {status}).',
@@ -648,6 +653,9 @@ const ru: Translations = {
   'yougile.taskDescription.archived': 'архив',
   'yougile.taskDescription.timerRunning': 'таймер запущен',
   'yougile.taskTooltip.taskId': 'ID задачи: {id}',
+  'yougile.taskTooltip.linkedBranch': 'Привязанная ветка: {branch}',
+  'messages.yougile.link.created':
+    'Создана локальная привязка для задачи YouGile "{task}" на ветку "{branch}".',
   'yougile.apiKeyMissing':
     'Пустой ключ YouGile API. Укажи cursorTaskChats.yougile.apiKey в настройках.',
   'yougile.requestFailed': 'Ошибка запроса к YouGile API (HTTP {status}).',
