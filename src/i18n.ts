@@ -116,6 +116,7 @@ export type TranslationKey =
   | 'yougile.rootLabel'
   | 'yougile.rootDescription'
   | 'yougile.rootDescription.filtered'
+  | 'yougile.rootDescription.today'
   | 'yougile.filter.summary.assignee'
   | 'yougile.filter.summary.project'
   | 'yougile.filter.summary.board'
@@ -128,12 +129,18 @@ export type TranslationKey =
   | 'yougile.taskDescription.open'
   | 'yougile.taskDescription.done'
   | 'yougile.taskDescription.archived'
+  | 'yougile.taskDescription.timerRunning'
   | 'yougile.taskTooltip.taskId'
   | 'yougile.apiKeyMissing'
   | 'yougile.requestFailed'
   | 'yougile.invalidJson'
   | 'commands.refreshYougile.title'
   | 'messages.refreshYougile.success'
+  | 'messages.yougile.timer.started'
+  | 'messages.yougile.timer.stopped'
+  | 'messages.yougile.timer.failed'
+  | 'messages.yougile.timer.missingContext'
+  | 'messages.yougile.timer.missingRecordId'
   | 'messages.yougile.filter.pickPlaceholder'
   | 'messages.yougile.filter.applied'
   | 'messages.yougile.filter.cleared'
@@ -174,6 +181,8 @@ export type TranslationKey =
   | 'commands.openYougileTaskDetails.title'
   | 'commands.setupYouGileAuth.title'
   | 'commands.openYouGileTimeReport.title'
+  | 'commands.startYouGileTimer.title'
+  | 'commands.stopYouGileTimer.title'
   | 'yougile.detail.subtitle'
   | 'yougile.detail.mainInfo'
   | 'yougile.detail.status'
@@ -218,6 +227,8 @@ export type TranslationKey =
   | 'yougile.detail.stickerValue'
   | 'yougile.detail.checklists'
   | 'yougile.detail.emptyChecklists'
+  | 'yougile.detail.checklist'
+  | 'yougile.detail.emptyChecklistItems'
   | 'yougile.detail.raw'
   | 'yougile.detail.emptyRaw';
 
@@ -362,6 +373,7 @@ const en: Translations = {
   'yougile.rootLabel': 'YouGile Tasks',
   'yougile.rootDescription': 'task tree from YouGile API',
   'yougile.rootDescription.filtered': 'task tree from YouGile API ({filters})',
+  'yougile.rootDescription.today': 'today: {time}',
   'yougile.filter.summary.assignee': 'assignee: {value}',
   'yougile.filter.summary.project': 'project: {value}',
   'yougile.filter.summary.board': 'board: {value}',
@@ -374,6 +386,7 @@ const en: Translations = {
   'yougile.taskDescription.open': 'open',
   'yougile.taskDescription.done': 'done',
   'yougile.taskDescription.archived': 'archived',
+  'yougile.taskDescription.timerRunning': 'timer running',
   'yougile.taskTooltip.taskId': 'Task ID: {id}',
   'yougile.apiKeyMissing':
     'YouGile API key is empty. Set cursorTaskChats.yougile.apiKey in settings.',
@@ -381,6 +394,11 @@ const en: Translations = {
   'yougile.invalidJson': 'YouGile API returned invalid JSON.',
   'commands.refreshYougile.title': 'Refresh YouGile Tasks',
   'messages.refreshYougile.success': 'YouGile tasks refreshed.',
+  'messages.yougile.timer.started': 'YouGile timer started: {task}.',
+  'messages.yougile.timer.stopped': 'YouGile timer stopped: {task}.',
+  'messages.yougile.timer.failed': 'YouGile timer request failed: {message}',
+  'messages.yougile.timer.missingContext': 'Could not resolve YouGile board context for this task.',
+  'messages.yougile.timer.missingRecordId': 'Could not resolve active timer record ID for this task.',
   'messages.yougile.filter.pickPlaceholder': 'Select assignee to filter tasks',
   'messages.yougile.filter.applied': 'YouGile filter applied: {assignee}.',
   'messages.yougile.filter.cleared': 'YouGile assignee filter cleared.',
@@ -423,6 +441,8 @@ const en: Translations = {
   'commands.openYougileTaskDetails.title': 'Open YouGile Task Details',
   'commands.setupYouGileAuth.title': 'Setup YouGile Auth',
   'commands.openYouGileTimeReport.title': 'Open YouGile Time Report',
+  'commands.startYouGileTimer.title': 'Start YouGile Timer',
+  'commands.stopYouGileTimer.title': 'Stop YouGile Timer',
   'yougile.detail.subtitle': 'Read-only task card from YouGile API',
   'yougile.detail.mainInfo': 'Main info',
   'yougile.detail.status': 'Status',
@@ -467,6 +487,8 @@ const en: Translations = {
   'yougile.detail.stickerValue': 'Value',
   'yougile.detail.checklists': 'Checklists',
   'yougile.detail.emptyChecklists': 'No checklists',
+  'yougile.detail.checklist': 'Checklist',
+  'yougile.detail.emptyChecklistItems': 'No items',
   'yougile.detail.raw': 'Raw payload',
   'yougile.detail.emptyRaw': 'No data',
 };
@@ -611,6 +633,7 @@ const ru: Translations = {
   'yougile.rootLabel': 'Задачи YouGile',
   'yougile.rootDescription': 'дерево задач из YouGile API',
   'yougile.rootDescription.filtered': 'дерево задач из YouGile API ({filters})',
+  'yougile.rootDescription.today': 'сегодня: {time}',
   'yougile.filter.summary.assignee': 'ответственный: {value}',
   'yougile.filter.summary.project': 'проект: {value}',
   'yougile.filter.summary.board': 'доска: {value}',
@@ -623,6 +646,7 @@ const ru: Translations = {
   'yougile.taskDescription.open': 'открыта',
   'yougile.taskDescription.done': 'выполнена',
   'yougile.taskDescription.archived': 'архив',
+  'yougile.taskDescription.timerRunning': 'таймер запущен',
   'yougile.taskTooltip.taskId': 'ID задачи: {id}',
   'yougile.apiKeyMissing':
     'Пустой ключ YouGile API. Укажи cursorTaskChats.yougile.apiKey в настройках.',
@@ -630,6 +654,11 @@ const ru: Translations = {
   'yougile.invalidJson': 'YouGile API вернул невалидный JSON.',
   'commands.refreshYougile.title': 'Обновить задачи YouGile',
   'messages.refreshYougile.success': 'Задачи YouGile обновлены.',
+  'messages.yougile.timer.started': 'Таймер YouGile запущен: {task}.',
+  'messages.yougile.timer.stopped': 'Таймер YouGile остановлен: {task}.',
+  'messages.yougile.timer.failed': 'Ошибка запроса таймера YouGile: {message}',
+  'messages.yougile.timer.missingContext': 'Не удалось определить доску YouGile для этой задачи.',
+  'messages.yougile.timer.missingRecordId': 'Не удалось определить recordId активного таймера этой задачи.',
   'messages.yougile.filter.pickPlaceholder': 'Выбери ответственного для фильтра задач',
   'messages.yougile.filter.applied': 'Фильтр YouGile применён: {assignee}.',
   'messages.yougile.filter.cleared': 'Фильтр YouGile по ответственному сброшен.',
@@ -672,6 +701,8 @@ const ru: Translations = {
   'commands.openYougileTaskDetails.title': 'Открыть детали задачи YouGile',
   'commands.setupYouGileAuth.title': 'Настроить авторизацию YouGile',
   'commands.openYouGileTimeReport.title': 'Открыть отчет по времени YouGile',
+  'commands.startYouGileTimer.title': 'Запустить таймер YouGile',
+  'commands.stopYouGileTimer.title': 'Остановить таймер YouGile',
   'yougile.detail.subtitle': 'Карточка задачи только для чтения из YouGile API',
   'yougile.detail.mainInfo': 'Основная информация',
   'yougile.detail.status': 'Статус',
@@ -716,6 +747,8 @@ const ru: Translations = {
   'yougile.detail.stickerValue': 'Значение',
   'yougile.detail.checklists': 'Чеклисты',
   'yougile.detail.emptyChecklists': 'Чеклисты отсутствуют',
+  'yougile.detail.checklist': 'Чеклист',
+  'yougile.detail.emptyChecklistItems': 'Пункты отсутствуют',
   'yougile.detail.raw': 'Сырые данные',
   'yougile.detail.emptyRaw': 'Данные отсутствуют',
 };

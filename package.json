@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.32",
+  "version": "1.1.37",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -49,9 +49,12 @@
     "onCommand:cursorTaskChats.openYouGileTimeReport",
     "onCommand:cursorTaskChats.setupYouGileAuth",
     "onCommand:cursorTaskChats.selectYouGileAssigneeFilter",
+    "onCommand:cursorTaskChats.selectYouGileAssigneeFilterActive",
     "onCommand:cursorTaskChats.selectYouGileProjectFilter",
     "onCommand:cursorTaskChats.selectYouGileBoardFilter",
-    "onCommand:cursorTaskChats.openYouGileTaskDetails"
+    "onCommand:cursorTaskChats.openYouGileTaskDetails",
+    "onCommand:cursorTaskChats.startYouGileTimer",
+    "onCommand:cursorTaskChats.stopYouGileTimer"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -162,6 +165,11 @@
         "icon": "$(filter)"
       },
       {
+        "command": "cursorTaskChats.selectYouGileAssigneeFilterActive",
+        "title": "%commands.selectYougileAssigneeFilter.title%",
+        "icon": "$(filter-filled)"
+      },
+      {
         "command": "cursorTaskChats.selectYouGileProjectFilter",
         "title": "%commands.selectYougileProjectFilter.title%",
         "icon": "$(folder-library)"
@@ -175,73 +183,16 @@
         "command": "cursorTaskChats.openYouGileTaskDetails",
         "title": "%commands.openYougileTaskDetails.title%",
         "icon": "$(notebook)"
-      }
-    ],
-    "configuration": [
-      {
-        "title": "%config.group.general.title%",
-        "properties": {
-          "cursorTaskChats.databaseRelativePath": {
-            "type": "string",
-            "default": ".cursor/task-chats/tasks.sqlite",
-            "description": "%config.databaseRelativePath.description%"
-          },
-          "cursorTaskChats.integration.source": {
-            "type": "string",
-            "enum": [
-              "local",
-              "yougile"
-            ],
-            "default": "local",
-            "description": "%config.integration.source.description%"
-          }
-        }
       },
       {
-        "title": "%config.group.yougile.required.title%",
-        "properties": {
-          "cursorTaskChats.yougile.apiBaseUrl": {
-            "type": "string",
-            "default": "https://ru.yougile.com/api-v2",
-            "description": "%config.yougile.apiBaseUrl.description%"
-          }
-        }
+        "command": "cursorTaskChats.startYouGileTimer",
+        "title": "%commands.startYouGileTimer.title%",
+        "icon": "$(play)"
       },
       {
-        "title": "%config.group.yougile.optional.title%",
-        "properties": {
-          "cursorTaskChats.yougile.showEmptyColumns": {
-            "type": "boolean",
-            "default": false,
-            "description": "%config.yougile.showEmptyColumns.description%"
-          },
-          "cursorTaskChats.yougile.showDebugPanels": {
-            "type": "boolean",
-            "default": false,
-            "description": "%config.yougile.showDebugPanels.description%"
-          },
-          "cursorTaskChats.yougile.report.lowDayThresholdHours": {
-            "type": "number",
-            "default": 6,
-            "minimum": 0,
-            "description": "%config.yougile.report.lowDayThresholdHours.description%"
-          },
-          "cursorTaskChats.yougile.report.lowDayCellColor": {
-            "type": "string",
-            "default": "rgba(255, 193, 7, 0.25)",
-            "description": "%config.yougile.report.lowDayCellColor.description%"
-          },
-          "cursorTaskChats.yougile.report.overEstimateRowColor": {
-            "type": "string",
-            "default": "rgba(255, 99, 71, 0.20)",
-            "description": "%config.yougile.report.overEstimateRowColor.description%"
-          },
-          "cursorTaskChats.yougile.report.intersectionCellColor": {
-            "type": "string",
-            "default": "rgba(255, 128, 0, 0.35)",
-            "description": "%config.yougile.report.intersectionCellColor.description%"
-          }
-        }
+        "command": "cursorTaskChats.stopYouGileTimer",
+        "title": "%commands.stopYouGileTimer.title%",
+        "icon": "$(debug-stop)"
       }
     ],
     "viewsContainers": {
@@ -295,7 +246,12 @@
         },
         {
           "command": "cursorTaskChats.selectYouGileAssigneeFilter",
-          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile && !cursorTaskChats.yougileAssigneeFilterActive",
+          "group": "navigation@3"
+        },
+        {
+          "command": "cursorTaskChats.selectYouGileAssigneeFilterActive",
+          "when": "view == taskChats.taskChatsView && config.cursorTaskChats.integration.source == yougile && cursorTaskChats.yougileAssigneeFilterActive",
           "group": "navigation@3"
         },
         {
@@ -401,12 +357,22 @@
         },
         {
           "command": "cursorTaskChats.openYouGileTaskDetails",
-          "when": "view == taskChats.taskChatsView && viewItem == yougileTask",
+          "when": "view == taskChats.taskChatsView && (viewItem == yougileTask || viewItem == yougileTaskLiveTimer)",
           "group": "inline"
         },
         {
           "command": "cursorTaskChats.openYouGileTaskDetails",
-          "when": "view == taskChats.taskChatsView && viewItem == yougileTask"
+          "when": "view == taskChats.taskChatsView && (viewItem == yougileTask || viewItem == yougileTaskLiveTimer)"
+        },
+        {
+          "command": "cursorTaskChats.startYouGileTimer",
+          "when": "view == taskChats.taskChatsView && viewItem == yougileTask",
+          "group": "inline@1"
+        },
+        {
+          "command": "cursorTaskChats.stopYouGileTimer",
+          "when": "view == taskChats.taskChatsView && viewItem == yougileTaskLiveTimer",
+          "group": "inline@1"
         }
       ]
     }

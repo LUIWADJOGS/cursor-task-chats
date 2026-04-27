@@ -87,6 +87,7 @@ export interface YouGileTaskTimeStats {
 export interface YouGileLiveTimer {
   taskId: string;
   userId: string;
+  recordId?: string;
   startedAt?: string;
   duration?: number;
 }
@@ -990,6 +991,7 @@ function parseLiveTimer(raw: unknown): YouGileLiveTimer | null {
   return {
     taskId,
     userId,
+    recordId: asString(entry.recordId) ?? asString(entry.id),
     startedAt: asString(entry.startedAt) ?? asString(entry.date),
     duration: asNumber(entry.duration),
   };
@@ -1216,6 +1218,129 @@ export async function getYouGileTimeStatsBatch(
       responseBody: root,
     },
   };
+}
+
+function createTimerRecordId(): string {
+  return Math.random().toString(36).slice(2, 11);
+}
+
+function resolveExtensionRequestConfig(hints?: { userId?: string; companyId?: string }): {
+  userKey: string;
+  userId: string;
+  companyId: string;
+  appVersion: string;
+  clientType: string;
+  v: number;
+} {
+  const extensionConfig = getYouGileExtensionConfig();
+  const fallbackUserId = getYouGileIntegrationOptions().assigneeId;
+  const userId = extensionConfig.userId ?? hints?.userId ?? fallbackUserId;
+  const companyId = extensionConfig.companyId ?? hints?.companyId;
+  if (!extensionConfig.userKey || !userId || !companyId) {
+    throw new Error(
+      `Missing required timetracking params: ${[
+        !extensionConfig.userKey ? 'userKey' : undefined,
+        !userId ? 'userId' : undefined,
+        !companyId ? 'companyId' : undefined,
+      ]
+        .filter((entry): entry is string => Boolean(entry))
+        .join(', ')}`
+    );
+  }
+  return {
+    userKey: extensionConfig.userKey,
+    userId,
+    companyId,
+    appVersion: extensionConfig.appVersion,
+    clientType: extensionConfig.clientType,
+    v: extensionConfig.v,
+  };
+}
+
+export async function startYouGileLiveTimer(options: {
+  boardId: string;
+  taskId: string;
+  taskIds: string[];
+  companyId?: string;
+  userId?: string;
+}): Promise<{ recordId: string }> {
+  const config = resolveExtensionRequestConfig(options);
+  const recordId = createTimerRecordId();
+  const payload = {
+    userId: config.userId,
+    key: config.userKey,
+    companyId: config.companyId,
+    extension: 'timetracking',
+    prop: 'commit',
+    args: [
+      {
+        type: 'StartLiveTimerForTask',
+        data: {
+          taskId: options.taskId,
+          userId: config.userId,
+          recordId,
+          startTime: new Date().toISOString(),
+        },
+        boardId: options.boardId,
+        userId: config.userId,
+        taskIds: options.taskIds,
+      },
+    ],
+    v: config.v,
+    appVersion: config.appVersion,
+    clientType: config.clientType,
+  };
+  await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/extension/exec'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return { recordId };
+}
+
+export async function stopYouGileLiveTimer(options: {
+  boardId: string;
+  taskId: string;
+  taskIds: string[];
+  recordId: string;
+  companyId?: string;
+  userId?: string;
+}): Promise<void> {
+  const config = resolveExtensionRequestConfig(options);
+  const payload = {
+    userId: config.userId,
+    key: config.userKey,
+    companyId: config.companyId,
+    extension: 'timetracking',
+    prop: 'commit',
+    args: [
+      {
+        type: 'StopLiveTimerForTask',
+        data: {
+          taskId: options.taskId,
+          userId: config.userId,
+          recordId: options.recordId,
+        },
+        boardId: options.boardId,
+        userId: config.userId,
+        taskIds: options.taskIds,
+      },
+    ],
+    v: config.v,
+    appVersion: config.appVersion,
+    clientType: config.clientType,
+  };
+  await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/extension/exec'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function setYouGileAssigneeFilter(

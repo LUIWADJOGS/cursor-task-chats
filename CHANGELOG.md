@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.36] - 2026-04-27
+
+### Added
+
+- Added a YouGile integration setup flow that discovers companies, gets or creates an API key, and stores required time tracking settings.
+- Added YouGile time tracking support in task cards and tree items, including active timer highlighting, start/stop timer actions, and daily tracked-time summaries.
+- Added a YouGile time report webview with week/custom period selection, per-user selection, daily totals, and overall totals.
+- Added compact YouGile task detail cards with grouped visual badges for status, people, dates, stickers, deadlines, and time tracking.
+- Added readable checklist rendering with checkbox-style completed and incomplete items.
+
+### Changed
+
+- Moved YouGile debug request/response and raw payload sections behind one debug toggle.
+- Removed contributed Settings UI entries to avoid the extra settings icon in the tree; setup and hidden workspace settings remain supported.
+- Improved YouGile task tree filtering indicators and root summary with active timer/day totals.
+
+### Fixed
+
+- Fixed persisted `companyId`/`userId` lookup after app reload by reading hidden workspace settings directly.
+- Fixed fact time display to prefer actual time tracking API totals over stale task payload values.
+
 ## [1.1.0] - 2026-04-13
 
 ### Added

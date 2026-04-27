@@ -33,6 +33,8 @@ import {
   setYouGileBoardFilter,
   setYouGileAssigneeFilter,
   setYouGileProjectFilter,
+  startYouGileLiveTimer,
+  stopYouGileLiveTimer,
   type YouGileBoard,
   type YouGileColumn,
   type YouGileLiveTimer,
@@ -139,13 +141,14 @@ export class TaskChatTreeItem extends vscode.TreeItem {
 
 export class YouGileRootTreeItem extends vscode.TreeItem {
   readonly nodeKind = 'yougile-root' as const;
-  constructor(filterLabel?: string) {
+  constructor(filterLabel?: string, todaySpentSeconds = 0, hasLiveTimer = false) {
     super(t('yougile.rootLabel'), vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'yougileRoot';
-    this.iconPath = new vscode.ThemeIcon('cloud');
-    this.description = filterLabel
-      ? t('yougile.rootDescription.filtered', { filters: filterLabel })
-      : t('yougile.rootDescription');
+    this.iconPath = hasLiveTimer
+      ? new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'))
+      : new vscode.ThemeIcon('cloud');
+    const todayLabel = t('yougile.rootDescription.today', { time: formatSpentTime(todaySpentSeconds) });
+    this.description = filterLabel ? `${todayLabel}; ${filterLabel}` : todayLabel;
   }
 }
 
@@ -185,16 +188,20 @@ export class YouGileTaskTreeItem extends vscode.TreeItem {
     public readonly task: YouGileTask,
     childCount: number,
     totalSpentSeconds?: number,
-    private readonly isSubtask = false
+    private readonly isSubtask = false,
+    private readonly hasLiveTimer = false
   ) {
     super(
       task.title,
       childCount > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
     );
-    this.contextValue = 'yougileTask';
+    this.contextValue = this.hasLiveTimer ? 'yougileTaskLiveTimer' : 'yougileTask';
     const timePart = typeof totalSpentSeconds === 'number' ? ` · ${formatSpentTime(totalSpentSeconds)}` : '';
-    this.description = `${getYouGileStatusLabel(task)}${timePart}`;
-    this.iconPath = new vscode.ThemeIcon(this.isSubtask ? 'list-tree' : 'checklist');
+    const timerPart = this.hasLiveTimer ? ` · ${t('yougile.taskDescription.timerRunning')}` : '';
+    this.description = `${getYouGileStatusLabel(task)}${timePart}${timerPart}`;
+    this.iconPath = this.hasLiveTimer
+      ? new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'))
+      : new vscode.ThemeIcon(this.isSubtask ? 'list-tree' : 'checklist');
     this.command = {
       command: 'cursorTaskChats.openYouGileTaskDetails',
       title: t('commands.openYougileTaskDetails.title'),
@@ -300,6 +307,26 @@ function readPlanHoursFromTask(task: YouGileTask): number | undefined {
   return undefined;
 }
 
+function getRecordLocalDateKey(date?: string): string | undefined {
+  if (!date) {
+    return undefined;
+  }
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return date.slice(0, 10);
+  }
+  return toDateKey(parsed);
+}
+
+function updateYouGileFilterContext(): void {
+  const options = getYouGileIntegrationOptions();
+  void vscode.commands.executeCommand(
+    'setContext',
+    'cursorTaskChats.yougileAssigneeFilterActive',
+    Boolean(options.assigneeId)
+  );
+}
+
 type YouGileTreeData = {
   boards: YouGileBoard[];
   columnsByBoardId: Map<string, YouGileColumn[]>;
@@ -310,6 +337,7 @@ type YouGileTreeData = {
   boardIdByTaskId: Map<string, string>;
   timeStatsByTaskId: Map<string, YouGileTaskTimeStats>;
   liveTimerByTaskId: Map<string, YouGileLiveTimer>;
+  todaySpentSeconds: number;
 };
 
 export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> {
@@ -331,6 +359,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   }
 
   refresh(): void {
+    updateYouGileFilterContext();
     this.yougileTreeData = undefined;
     this.yougileErrorShown = false;
     this.yougileAssigneeLabelCache.clear();
@@ -461,11 +490,11 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
     if (!element) {
       const options = getYouGileIntegrationOptions();
       const filterLabel = await this.resolveYouGileFilterLabel(
-        options.assigneeId,
+        undefined,
         options.projectId,
         options.boardId
       );
-      return [new YouGileRootTreeItem(filterLabel)];
+      return [new YouGileRootTreeItem(filterLabel, data.todaySpentSeconds, data.liveTimerByTaskId.size > 0)];
     }
 
     if (element instanceof YouGileRootTreeItem) {
@@ -488,7 +517,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         .map((task) => {
           const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
           const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
-          return new YouGileTaskTreeItem(task, childCount, total, false);
+          return new YouGileTaskTreeItem(task, childCount, total, false, data.liveTimerByTaskId.has(task.id));
         });
     }
 
@@ -497,7 +526,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       return children.map((task) => {
         const childCount = data.childrenByParentId.get(task.id)?.length ?? 0;
         const total = data.timeStatsByTaskId.get(task.id)?.totalSpentTime;
-        return new YouGileTaskTreeItem(task, childCount, total, true);
+        return new YouGileTaskTreeItem(task, childCount, total, true, data.liveTimerByTaskId.has(task.id));
       });
     }
 
@@ -603,6 +632,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       const boardIdByTaskId = new Map<string, string>();
       const timeStatsByTaskId = new Map<string, YouGileTaskTimeStats>();
       const liveTimerByTaskId = new Map<string, YouGileLiveTimer>();
+      let todaySpentSeconds = 0;
+      const todayKey = toDateKey(new Date());
+      const reportUserId = getYouGileExtensionConfig().userId ?? options.assigneeId;
 
       for (const column of source.columns) {
         if (!column.boardId) {
@@ -691,6 +723,14 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
           });
           for (const [taskId, stats] of Object.entries(timeData.taskStats)) {
             timeStatsByTaskId.set(taskId, stats);
+            const userStats = reportUserId ? stats.users[reportUserId] : undefined;
+            if (userStats) {
+              for (const record of userStats.records) {
+                if (getRecordLocalDateKey(record.date) === todayKey) {
+                  todaySpentSeconds += record.duration;
+                }
+              }
+            }
           }
           for (const timer of timeData.liveTimers) {
             liveTimerByTaskId.set(timer.taskId, timer);
@@ -710,6 +750,7 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         boardIdByTaskId,
         timeStatsByTaskId,
         liveTimerByTaskId,
+        todaySpentSeconds,
       };
       return this.yougileTreeData;
     } catch (error) {
@@ -729,8 +770,35 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         boardIdByTaskId: new Map<string, string>(),
         timeStatsByTaskId: new Map<string, YouGileTaskTimeStats>(),
         liveTimerByTaskId: new Map<string, YouGileLiveTimer>(),
+        todaySpentSeconds: 0,
       };
     }
+  }
+
+  async getYouGileTimerContext(taskId: string): Promise<{
+    boardId: string;
+    taskIds: string[];
+    task?: YouGileTask;
+    liveTimer?: YouGileLiveTimer;
+    companyId?: string;
+  } | undefined> {
+    const data = await this.getYouGileTreeData();
+    const boardId = data.boardIdByTaskId.get(taskId);
+    if (!boardId) {
+      return undefined;
+    }
+    const taskIds = Array.from(data.boardIdByTaskId.entries())
+      .filter(([, candidateBoardId]) => candidateBoardId === boardId)
+      .map(([candidateTaskId]) => candidateTaskId);
+    const task = data.taskById.get(taskId);
+    const firstTask = taskIds.map((candidateTaskId) => data.taskById.get(candidateTaskId)).find(Boolean);
+    return {
+      boardId,
+      taskIds,
+      task,
+      liveTimer: data.liveTimerByTaskId.get(taskId),
+      companyId: task ? readCompanyIdFromTask(task) : firstTask ? readCompanyIdFromTask(firstTask) : undefined,
+    };
   }
 }
 
@@ -750,6 +818,74 @@ export function registerTaskTreeCommands(
     vscode.commands.registerCommand('cursorTaskChats.refreshYouGile', () => {
       provider.refresh();
       void vscode.window.showInformationMessage(t('messages.refreshYougile.success'));
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.startYouGileTimer', async (item?: YouGileTaskTreeItem) => {
+      if (!item) {
+        return;
+      }
+      try {
+        const timerContext = await provider.getYouGileTimerContext(item.task.id);
+        if (!timerContext) {
+          void vscode.window.showErrorMessage(t('messages.yougile.timer.missingContext'));
+          return;
+        }
+        await startYouGileLiveTimer({
+          boardId: timerContext.boardId,
+          taskId: item.task.id,
+          taskIds: timerContext.taskIds,
+          companyId: timerContext.companyId,
+        });
+        provider.refresh();
+        void vscode.window.showInformationMessage(
+          t('messages.yougile.timer.started', { task: item.task.title })
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          t('messages.yougile.timer.failed', {
+            message: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.stopYouGileTimer', async (item?: YouGileTaskTreeItem) => {
+      if (!item) {
+        return;
+      }
+      try {
+        const timerContext = await provider.getYouGileTimerContext(item.task.id);
+        if (!timerContext) {
+          void vscode.window.showErrorMessage(t('messages.yougile.timer.missingContext'));
+          return;
+        }
+        const recordId = timerContext.liveTimer?.recordId;
+        if (!recordId) {
+          void vscode.window.showErrorMessage(t('messages.yougile.timer.missingRecordId'));
+          return;
+        }
+        await stopYouGileLiveTimer({
+          boardId: timerContext.boardId,
+          taskId: item.task.id,
+          taskIds: timerContext.taskIds,
+          recordId,
+          companyId: timerContext.companyId,
+        });
+        provider.refresh();
+        void vscode.window.showInformationMessage(
+          t('messages.yougile.timer.stopped', { task: item.task.title })
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          t('messages.yougile.timer.failed', {
+            message: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
     })
   );
 
@@ -1114,6 +1250,12 @@ export function registerTaskTreeCommands(
           assignee: picked.user.realName ?? picked.user.name ?? picked.user.email ?? picked.user.id,
         })
       );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('cursorTaskChats.selectYouGileAssigneeFilterActive', async () => {
+      await vscode.commands.executeCommand('cursorTaskChats.selectYouGileAssigneeFilter');
     })
   );
 
