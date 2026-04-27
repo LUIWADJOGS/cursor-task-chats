@@ -3,6 +3,7 @@ out/
 *.vsix
 *.log
 *.tmp
+test.http
 
 .DS_Store
 Thumbs.db
