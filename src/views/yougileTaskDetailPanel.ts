@@ -103,10 +103,130 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+// YouGile may return numeric palette IDs (for example color: 16) instead of hex strings.
+const YOUGILE_COLOR_PALETTE: string[] = [
+  '#f85149',
+  '#ff7b72',
+  '#d29922',
+  '#e3b341',
+  '#3fb950',
+  '#2ea043',
+  '#56d364',
+  '#1f6feb',
+  '#58a6ff',
+  '#a371f7',
+  '#bc8cff',
+  '#db61a2',
+  '#f778ba',
+  '#8b949e',
+  '#6e7681',
+  '#ffa657',
+];
+
+function resolveYouGilePaletteColor(value: number): string | undefined {
+  if (!Number.isInteger(value)) {
+    return undefined;
+  }
+  // API may use either 0-based [0..15] or 1-based [1..16] palette IDs.
+  if (value >= 0 && value < YOUGILE_COLOR_PALETTE.length) {
+    return YOUGILE_COLOR_PALETTE[value];
+  }
+  if (value >= 1 && value <= YOUGILE_COLOR_PALETTE.length) {
+    return YOUGILE_COLOR_PALETTE[value - 1];
+  }
+  return undefined;
+}
+
+function normalizeHexColor(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^#?[0-9a-f]{3,8}$/i.test(trimmed)) {
+    return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  }
+  const withPrefix = /^0x([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(trimmed);
+  if (withPrefix) {
+    return `#${withPrefix[1]}`;
+  }
+  return undefined;
+}
+
+function normalizeRgbRecord(value: Record<string, unknown>): string | undefined {
+  const red = typeof value.r === 'number' ? value.r : typeof value.red === 'number' ? value.red : undefined;
+  const green = typeof value.g === 'number' ? value.g : typeof value.green === 'number' ? value.green : undefined;
+  const blue = typeof value.b === 'number' ? value.b : typeof value.blue === 'number' ? value.blue : undefined;
+  if (red === undefined || green === undefined || blue === undefined) {
+    return undefined;
+  }
+  const valid = [red, green, blue].every((entry) => Number.isFinite(entry) && entry >= 0 && entry <= 255);
+  if (!valid) {
+    return undefined;
+  }
+  return `rgb(${Math.round(red)}, ${Math.round(green)}, ${Math.round(blue)})`;
+}
+
+function normalizeColorValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const hex = normalizeHexColor(value);
+    if (hex) {
+      return hex;
+    }
+    const trimmed = value.trim();
+    if (/^rgba?\(/i.test(trimmed) || /^hsla?\(/i.test(trimmed) || /^var\(/i.test(trimmed)) {
+      return trimmed;
+    }
+    return undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const paletteColor = resolveYouGilePaletteColor(value);
+    if (paletteColor) {
+      return paletteColor;
+    }
+    if (value >= 0 && value <= 0xffffff) {
+      return `#${Math.round(value).toString(16).padStart(6, '0')}`;
+    }
+  }
+  const record = asRecord(value);
+  if (record) {
+    return normalizeRgbRecord(record);
+  }
+  return undefined;
+}
+
 function readColor(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && /^#?[0-9a-f]{3,8}$/i.test(value.trim())) {
-      return value.trim().startsWith('#') ? value.trim() : `#${value.trim()}`;
+  const queue: unknown[] = [...values];
+  const visited = new Set<Record<string, unknown>>();
+  while (queue.length) {
+    const value = queue.shift();
+    const direct = normalizeColorValue(value);
+    if (direct) {
+      return direct;
+    }
+    const record = asRecord(value);
+    if (!record || visited.has(record)) {
+      continue;
+    }
+    visited.add(record);
+    const nestedCandidates = [
+      record.color,
+      record.backgroundColor,
+      record.hexColor,
+      record.bgColor,
+      record.fillColor,
+      record.strokeColor,
+      record.value,
+      record.style,
+      record.background,
+      record.fill,
+      record.stroke,
+      record.palette,
+      record.theme,
+    ];
+    for (const candidate of nestedCandidates) {
+      if (candidate !== undefined) {
+        queue.push(candidate);
+      }
     }
   }
   return undefined;
@@ -216,7 +336,7 @@ function buildMetaRows(
   const isClosed = Boolean(task.completed || task.archived);
   const statusColor = isClosed ? '#f85149' : '#2ea043';
   const statusLabel = isClosed ? t('yougile.taskDescription.done') : t('yougile.taskDescription.open');
-  const columnColor = readColor(column?.raw.color, column?.raw.backgroundColor, column?.raw.hexColor) ?? '#2f81f7';
+  const columnColor = readColor(column?.raw.color, column?.raw.backgroundColor, column?.raw.hexColor, column?.raw) ?? '#2f81f7';
   const timeTracking = asRecord(raw.timeTracking);
   const deadline = formatDeadline(raw.deadline);
   const stickerBadges = renderStickerBadges(raw.stickers, stickersById);
@@ -248,6 +368,7 @@ function buildMetaRows(
   const planValue = planSeconds !== undefined ? formatDuration(planSeconds) : '—';
   const deltaValue = deltaSeconds !== undefined ? formatSignedDuration(deltaSeconds) : '—';
   const factClass = deltaSeconds === undefined || deltaSeconds <= 0 ? 'good' : 'bad';
+  const createdAt = formatDateTime((raw as Record<string, unknown>).timestamp);
   return `
     <div class="task-summary" style="--column-color:${escapeHtml(columnColor)};">
       <div class="task-summary-head">
@@ -256,6 +377,7 @@ function buildMetaRows(
           <span class="task-title-text">${escapeHtml(task.title)}</span>
           <span class="task-column-name">(${escapeHtml(columnName)})</span>
         </div>
+        <div class="created-at">＋ ${escapeHtml(createdAt)}</div>
       </div>
       <div class="task-summary-row">
         <div class="task-people">
@@ -586,6 +708,15 @@ function buildHtml(
   const deadline = (task.raw as Record<string, unknown>).deadline;
   const checklists = (task.raw as Record<string, unknown>).checklists;
   const timeTracking = (task.raw as Record<string, unknown>).timeTracking;
+  const currentColumn = task.columnId ? columnsById.get(task.columnId) : undefined;
+  const columnDebugPayload = currentColumn
+    ? {
+        id: currentColumn.id,
+        title: currentColumn.title,
+        raw: currentColumn.raw,
+      }
+    : undefined;
+  const columnDebugTitle = `${t('yougile.detail.column')} (${t('yougile.detail.raw')})`;
 
   return `<!DOCTYPE html>
 <html>
@@ -598,17 +729,16 @@ function buildHtml(
     .card { background: var(--vscode-sideBar-background); border: 1px solid var(--vscode-widget-border, transparent); border-radius: 10px; padding: 14px; }
     h1 { margin: 0 0 6px; font-size: 1.3rem; }
     h2 { margin: 0 0 10px; font-size: 1rem; }
-    .muted { color: var(--vscode-descriptionForeground); }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
     .meta-item { background: var(--vscode-editorWidget-background, rgba(127,127,127,.08)); border-radius: 8px; padding: 10px; }
     .meta-label { font-size: .78rem; color: var(--vscode-descriptionForeground); margin-bottom: 4px; text-transform: uppercase; }
     .meta-value { word-break: break-word; }
-    .title-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-    .created-at { color: var(--vscode-descriptionForeground); white-space: nowrap; font-size: .9rem; margin-top: 2px; }
     .task-summary { border: 1px solid color-mix(in srgb, var(--column-color) 55%, transparent); border-left: 6px solid var(--column-color); background: color-mix(in srgb, var(--column-color) 12%, var(--vscode-sideBar-background)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
-    .task-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .task-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .task-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+    .created-at { color: var(--vscode-descriptionForeground); white-space: nowrap; font-size: .9rem; flex: 0 0 auto; text-align: right; align-self: center; }
     .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--status-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 20%, transparent); flex: 0 0 auto; }
-    .task-title-text { font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-title-text { font-weight: 700; font-size: 1.12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .task-column-name { color: var(--vscode-descriptionForeground); white-space: nowrap; }
     .task-summary-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
     .task-people { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
@@ -652,17 +782,6 @@ function buildHtml(
 <body>
   <div class="layout">
     <section class="card">
-      <div class="title-card">
-        <div>
-          <h1>${escapeHtml(task.title)}</h1>
-          <div class="muted">${escapeHtml(t('yougile.detail.subtitle'))}</div>
-        </div>
-        <div class="created-at">＋ ${escapeHtml(formatDateTime((task.raw as Record<string, unknown>).timestamp))}</div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>${escapeHtml(t('yougile.detail.mainInfo'))}</h2>
       ${buildMetaRows(task, usersById, columnsById, stickersById, taskTimeStats, liveTimer)}
     </section>
 
@@ -676,6 +795,7 @@ function buildHtml(
     </section>
 
     ${showDebugPanels ? renderStickersSection(stickers, stickersById) : ''}
+    ${showDebugPanels ? renderJsonSection(columnDebugTitle, columnDebugPayload, t('yougile.detail.unknownColumn')) : ''}
     ${showDebugPanels ? renderJsonSection(t('yougile.detail.deadline'), deadline, t('yougile.detail.emptyDeadline')) : ''}
     ${showDebugPanels ? renderTimeTrackingSection(timeTracking, taskTimeStats) : ''}
     ${showDebugPanels ? renderActualTimeSection(usersById, taskTimeStats, liveTimer) : ''}

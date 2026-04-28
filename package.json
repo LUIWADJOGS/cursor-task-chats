@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.37",
+  "version": "1.2.1",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -373,6 +373,151 @@
           "command": "cursorTaskChats.stopYouGileTimer",
           "when": "view == taskChats.taskChatsView && viewItem == yougileTaskLiveTimer",
           "group": "inline@1"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Cursor Task Chats",
+      "allOf": [
+        {
+          "title": "%config.group.general.title%",
+          "properties": {
+            "cursorTaskChats.databaseRelativePath": {
+              "type": "string",
+              "default": ".cursor/task-chats/tasks.sqlite",
+              "description": "%config.databaseRelativePath.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.integration.source": {
+              "type": "string",
+              "enum": [
+                "local",
+                "yougile"
+              ],
+              "default": "local",
+              "description": "%config.integration.source.description%",
+              "scope": "resource"
+            }
+          }
+        },
+        {
+          "title": "%config.group.yougile.required.title%",
+          "properties": {
+            "cursorTaskChats.yougile.apiBaseUrl": {
+              "type": "string",
+              "default": "https://ru.yougile.com/api-v2",
+              "description": "%config.yougile.apiBaseUrl.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.apiKey": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.apiKey.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.userKey": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.extension.userKey.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.companyId": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.extension.companyId.description%",
+              "scope": "resource"
+            }
+          }
+        },
+        {
+          "title": "%config.group.yougile.optional.title%",
+          "properties": {
+            "cursorTaskChats.yougile.assigneeId": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.assigneeId.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.projectId": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.projectId.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.boardId": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.boardId.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.showEmptyColumns": {
+              "type": "boolean",
+              "default": false,
+              "description": "%config.yougile.showEmptyColumns.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.showDebugPanels": {
+              "type": "boolean",
+              "default": false,
+              "description": "%config.yougile.showDebugPanels.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.showRawPayloadInDetails": {
+              "type": "boolean",
+              "default": false,
+              "description": "%config.yougile.showRawPayloadInDetails.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.report.lowDayThresholdHours": {
+              "type": "number",
+              "default": 0,
+              "description": "%config.yougile.report.lowDayThresholdHours.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.report.lowDayCellColor": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.report.lowDayCellColor.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.report.overEstimateRowColor": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.report.overEstimateRowColor.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.report.intersectionCellColor": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.report.intersectionCellColor.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.userId": {
+              "type": "string",
+              "default": "",
+              "description": "%config.yougile.extension.userId.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.apiVersion": {
+              "type": "number",
+              "default": 9,
+              "description": "%config.yougile.extension.apiVersion.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.appVersion": {
+              "type": "string",
+              "default": "40.45.1",
+              "description": "%config.yougile.extension.appVersion.description%",
+              "scope": "resource"
+            },
+            "cursorTaskChats.yougile.extension.clientType": {
+              "type": "string",
+              "default": "web",
+              "description": "%config.yougile.extension.clientType.description%",
+              "scope": "resource"
+            }
+          }
         }
       ]
     }

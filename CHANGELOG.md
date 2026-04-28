@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-04-27
+
+### Changed
+
+- Fixed YouGile column highlight color for numeric palette IDs (for example `color: 16`) by mapping palette codes to visual colors instead of treating them as raw numeric hex values.
+
+## [1.1.41] - 2026-04-27
+
+### Changed
+
+- Restored extension Settings UI entries for Cursor Task Chats and YouGile options so parameters are editable from the standard extension settings panel again.
+
+## [1.1.40] - 2026-04-27
+
+### Changed
+
+- Improved YouGile column color parsing in task details to support more API formats (hex with/without prefix, numeric RGB values, and nested color fields in raw payloads).
+
+## [1.1.39] - 2026-04-27
+
+### Changed
+
+- YouGile task detail: creation date on the same line as the task title (right-aligned), directly above the time summary row.
+- Added a debug section in the task detail card to show current column payload from /columns (id, title, raw).
+
+## [1.1.38] - 2026-04-27
+
+### Changed
+
+- YouGile task detail webview: single header card with task title (no duplicate heading), creation date on the right, removed the read-only subtitle and the separate «Основная информация» section.
+
 ## [1.1.36] - 2026-04-27
 
 ### Added
