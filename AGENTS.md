@@ -6,6 +6,8 @@
 - When the user asks to "подними версию" or "собери", bump the patch version in both `package.json` and `package-lock.json`, then run `npx @vscode/vsce package`.
 - Do not create git commits unless the user explicitly asks.
 - Do not revert unrelated local changes. This workspace is often edited iteratively by the user.
+- Store all planning and documentation files in `docs/`. Keep implementation plans in `docs/plans/` and general documentation in `docs/`.
+- Keep all files under `docs/` in Russian.
 
 ## Extension Notes
 

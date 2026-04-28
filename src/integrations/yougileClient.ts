@@ -1082,6 +1082,34 @@ export async function resolveYouGileApiKey(
   return { key };
 }
 
+export async function resolveYouGileUserKey(
+  login: string,
+  password: string
+): Promise<{ key: string; userId?: string }> {
+  const extensionConfig = getYouGileExtensionConfig();
+  const payload = await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/key'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: login,
+      password,
+      v: extensionConfig.v,
+      appVersion: extensionConfig.appVersion,
+      clientType: extensionConfig.clientType,
+    }),
+  });
+  const response = asRecord(payload);
+  const key = asString(response?.key);
+  if (!key) {
+    throw new Error('YouGile user_key was not returned by /data/key endpoint');
+  }
+  const userId = asString(response?.userId) ?? asString(response?.idUser);
+  return { key, userId };
+}
+
 export async function saveYouGileAuthSetup(options: {
   apiKey: string;
   userKey?: string;

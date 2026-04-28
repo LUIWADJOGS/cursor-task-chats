@@ -27,6 +27,7 @@ import {
   getYouGileTimeStatsBatch,
   getYouGileAuthCompanies,
   resolveYouGileApiKey,
+  resolveYouGileUserKey,
   saveYouGileAuthSetup,
   getYouGileStringStickers,
   getYouGileUsers,
@@ -1020,15 +1021,8 @@ export function registerTaskTreeCommands(
         }
 
         const keyData = await resolveYouGileApiKey(login.trim(), password.trim(), picked.company.id);
-        const userKey = await vscode.window.showInputBox({
-          prompt: t('messages.yougile.setup.userKeyPrompt'),
-          ignoreFocusOut: true,
-          validateInput: (value) => (value?.trim() ? null : t('messages.yougile.setup.userKeyValidation')),
-        });
-        if (!userKey?.trim()) {
-          return;
-        }
-        let selectedUserId = keyData.userId;
+        const userKeyData = await resolveYouGileUserKey(login.trim(), password.trim());
+        let selectedUserId = userKeyData.userId ?? keyData.userId;
         if (!selectedUserId) {
           const apiUsers = await getYouGileUsersByApiKey(keyData.key);
           if (apiUsers.length > 0) {
@@ -1058,7 +1052,7 @@ export function registerTaskTreeCommands(
         }
         await saveYouGileAuthSetup({
           apiKey: keyData.key,
-          userKey: userKey.trim(),
+          userKey: userKeyData.key,
           companyId: picked.company.id,
           userId: selectedUserId.trim(),
         });
