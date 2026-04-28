@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-04-28
+
+### Changed
+
+- Merged remote YouGile task-linking changes with the latest local YouGile detail and color handling updates for packaging.
+
 ## [1.2.1] - 2026-04-27
 
 ### Changed

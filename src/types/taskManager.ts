@@ -27,6 +27,14 @@ export interface TaskChatEntity {
   status: TaskChatStatus;
 }
 
+export interface YouGileTaskLinkEntity {
+  workspaceFolder: string;
+  yougileTaskId: string;
+  localTaskId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const TASK_REGISTRY_SCHEMA_VERSION = 1 as const;
 
 export interface TaskRegistryData {
