@@ -35,6 +35,15 @@ export interface YouGileTaskLinkEntity {
   updatedAt: string;
 }
 
+export interface ProviderTaskLinkEntity {
+  workspaceFolder: string;
+  provider: string;
+  remoteTaskId: string;
+  localTaskId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const TASK_REGISTRY_SCHEMA_VERSION = 1 as const;
 
 export interface TaskRegistryData {

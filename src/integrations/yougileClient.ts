@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { t } from '../i18n';
+import { getConfiguredProviderId } from '../providers/providerRegistry';
 
 const DEFAULT_API_BASE_URL = 'https://ru.yougile.com/api-v2';
 const NO_COLUMN_GROUP_ID = '__yougile_no_column__';
@@ -524,8 +525,8 @@ async function getAllTaskListItems(
 }
 
 export function getTaskSource(): 'local' | 'yougile' {
-  const value = vscode.workspace.getConfiguration('cursorTaskChats').get<string>('integration.source');
-  return value === 'yougile' ? 'yougile' : 'local';
+  const providerId = getConfiguredProviderId();
+  return providerId === 'yougile' ? 'yougile' : 'local';
 }
 
 export function getYouGileConfig(): { apiBaseUrl: string; apiKey: string } {

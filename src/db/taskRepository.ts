@@ -11,9 +11,11 @@ import type {
   TaskChatStatus,
   TaskChecklistItem,
   TaskEntity,
+  ProviderTaskLinkEntity,
   TaskStatus,
   YouGileTaskLinkEntity,
 } from '../types/taskManager';
+import type { ProviderId, UnifiedTaskRef } from '../providers/types';
 
 /** Keyed by absolute SQLite path so changing `databaseRelativePath` does not reuse a stale DB handle. */
 const repoCache = new Map<string, TaskRepository>();
@@ -79,17 +81,27 @@ function applyInitialSchema(db: Database): void {
       updated_at TEXT NOT NULL,
       UNIQUE(workspace_folder, yougile_task_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS provider_task_links (
+      workspace_folder TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      remote_task_id TEXT NOT NULL,
+      local_task_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(workspace_folder, provider, remote_task_id)
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_tasks_branch_ws ON tasks(branch_name, workspace_folder)`,
     `CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_chats_task ON task_chats(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_checklist_task ON task_checklist_items(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_attach_task ON task_attachments(task_id)`,
     `CREATE INDEX IF NOT EXISTS idx_yougile_links_local_task ON yougile_task_links(local_task_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_provider_links_local_task ON provider_task_links(local_task_id)`,
   ];
   for (const sql of statements) {
     db.run(sql);
   }
-  db.run('PRAGMA user_version = 2');
+  db.run('PRAGMA user_version = 3');
 }
 
 function applySchemaV2(db: Database): void {
@@ -105,6 +117,28 @@ function applySchemaV2(db: Database): void {
   );
   db.run('CREATE INDEX IF NOT EXISTS idx_yougile_links_local_task ON yougile_task_links(local_task_id)');
   db.run('PRAGMA user_version = 2');
+}
+
+function applySchemaV3(db: Database): void {
+  db.run(
+    `CREATE TABLE IF NOT EXISTS provider_task_links (
+      workspace_folder TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      remote_task_id TEXT NOT NULL,
+      local_task_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(workspace_folder, provider, remote_task_id)
+    )`
+  );
+  db.run('CREATE INDEX IF NOT EXISTS idx_provider_links_local_task ON provider_task_links(local_task_id)');
+  db.run(
+    `INSERT OR IGNORE INTO provider_task_links
+      (workspace_folder, provider, remote_task_id, local_task_id, created_at, updated_at)
+     SELECT workspace_folder, 'yougile', yougile_task_id, local_task_id, created_at, updated_at
+     FROM yougile_task_links`
+  );
+  db.run('PRAGMA user_version = 3');
 }
 
 function persistDb(db: Database, dbPath: string): void {
@@ -167,10 +201,11 @@ function rowAttachment(r: Record<string, unknown>): TaskAttachmentEntity {
   };
 }
 
-function rowYouGileTaskLink(r: Record<string, unknown>): YouGileTaskLinkEntity {
+function rowProviderTaskLink(r: Record<string, unknown>): ProviderTaskLinkEntity {
   return {
     workspaceFolder: String(r.workspace_folder),
-    yougileTaskId: String(r.yougile_task_id),
+    provider: String(r.provider),
+    remoteTaskId: String(r.remote_task_id),
     localTaskId: String(r.local_task_id),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
@@ -196,11 +231,17 @@ export async function openTaskRepository(
     db = new SQL.Database();
   }
 
-  const userVersion = getUserVersion(db);
+  let userVersion = getUserVersion(db);
   if (userVersion < 1) {
     applyInitialSchema(db);
-  } else if (userVersion < 2) {
+    userVersion = 3;
+  }
+  if (userVersion < 2) {
     applySchemaV2(db);
+    userVersion = 2;
+  }
+  if (userVersion < 3) {
+    applySchemaV3(db);
   }
 
   migrateLegacyJsonIntoDatabaseIfNeeded(db, context, workspaceFolder.uri.fsPath);
@@ -246,63 +287,86 @@ export class TaskRepository {
     return out;
   }
 
-  getYouGileTaskLinkByTaskId(yougileTaskId: string): YouGileTaskLinkEntity | null {
+  getProviderTaskLink(provider: ProviderId, remoteTaskId: string): ProviderTaskLinkEntity | null {
     const stmt = this.db.prepare(
-      `SELECT * FROM yougile_task_links WHERE workspace_folder = ? AND yougile_task_id = ? LIMIT 1`
+      `SELECT * FROM provider_task_links
+       WHERE workspace_folder = ? AND provider = ? AND remote_task_id = ? LIMIT 1`
     );
-    stmt.bind([this.workspaceFolderFsPath, yougileTaskId]);
+    stmt.bind([this.workspaceFolderFsPath, provider, remoteTaskId]);
     if (!stmt.step()) {
       stmt.free();
       return null;
     }
-    const row = rowYouGileTaskLink(stmt.getAsObject());
+    const row = rowProviderTaskLink(stmt.getAsObject());
     stmt.free();
     return row;
   }
 
-  getLinkedLocalTaskByYouGileTaskId(yougileTaskId: string): TaskEntity | null {
-    const link = this.getYouGileTaskLinkByTaskId(yougileTaskId);
+  getYouGileTaskLinkByTaskId(yougileTaskId: string): YouGileTaskLinkEntity | null {
+    const link = this.getProviderTaskLink('yougile', yougileTaskId);
+    if (!link) {
+      return null;
+    }
+    return {
+      workspaceFolder: link.workspaceFolder,
+      yougileTaskId: link.remoteTaskId,
+      localTaskId: link.localTaskId,
+      createdAt: link.createdAt,
+      updatedAt: link.updatedAt,
+    };
+  }
+
+  getLinkedLocalTask(provider: ProviderId, remoteTaskId: string): TaskEntity | null {
+    const link = this.getProviderTaskLink(provider, remoteTaskId);
     if (!link) {
       return null;
     }
     return this.getTaskById(link.localTaskId);
   }
 
-  getLinkedTaskBranchesByYouGileTaskIds(yougileTaskIds: string[]): Map<string, string> {
-    const uniqueIds = Array.from(new Set(yougileTaskIds.map((id) => id.trim()).filter((id) => Boolean(id))));
+  getLinkedLocalTaskByYouGileTaskId(yougileTaskId: string): TaskEntity | null {
+    return this.getLinkedLocalTask('yougile', yougileTaskId);
+  }
+
+  getLinkedTaskBranchesByProviderTaskIds(provider: ProviderId, remoteTaskIds: string[]): Map<string, string> {
+    const uniqueIds = Array.from(new Set(remoteTaskIds.map((id) => id.trim()).filter((id) => Boolean(id))));
     if (uniqueIds.length === 0) {
       return new Map<string, string>();
     }
     const placeholders = uniqueIds.map(() => '?').join(',');
     const stmt = this.db.prepare(
-      `SELECT l.yougile_task_id as yougile_task_id, t.branch_name as branch_name
-       FROM yougile_task_links l
+      `SELECT l.remote_task_id as remote_task_id, t.branch_name as branch_name
+       FROM provider_task_links l
        JOIN tasks t ON t.id = l.local_task_id
-       WHERE l.workspace_folder = ? AND l.yougile_task_id IN (${placeholders}) AND t.workspace_folder = ?`
+       WHERE l.workspace_folder = ? AND l.provider = ? AND l.remote_task_id IN (${placeholders}) AND t.workspace_folder = ?`
     );
-    stmt.bind([this.workspaceFolderFsPath, ...uniqueIds, this.workspaceFolderFsPath]);
+    stmt.bind([this.workspaceFolderFsPath, provider, ...uniqueIds, this.workspaceFolderFsPath]);
     const out = new Map<string, string>();
     while (stmt.step()) {
       const row = stmt.getAsObject() as Record<string, unknown>;
-      const yougileTaskId = typeof row.yougile_task_id === 'string' ? row.yougile_task_id : undefined;
+      const remoteTaskId = typeof row.remote_task_id === 'string' ? row.remote_task_id : undefined;
       const branchName = typeof row.branch_name === 'string' ? row.branch_name : undefined;
-      if (yougileTaskId && branchName) {
-        out.set(yougileTaskId, branchName);
+      if (remoteTaskId && branchName) {
+        out.set(remoteTaskId, branchName);
       }
     }
     stmt.free();
     return out;
   }
 
-  linkYouGileTaskToLocalTask(yougileTaskId: string, localTaskId: string): YouGileTaskLinkEntity {
+  getLinkedTaskBranchesByYouGileTaskIds(yougileTaskIds: string[]): Map<string, string> {
+    return this.getLinkedTaskBranchesByProviderTaskIds('yougile', yougileTaskIds);
+  }
+
+  setLinkedLocalTask(provider: ProviderId, remoteTaskId: string, localTaskId: string): ProviderTaskLinkEntity {
     const now = new Date().toISOString();
-    const existing = this.getYouGileTaskLinkByTaskId(yougileTaskId);
+    const existing = this.getProviderTaskLink(provider, remoteTaskId);
     if (existing) {
       this.db.run(
-        `UPDATE yougile_task_links
+        `UPDATE provider_task_links
          SET local_task_id = ?, updated_at = ?
-         WHERE workspace_folder = ? AND yougile_task_id = ?`,
-        [localTaskId, now, this.workspaceFolderFsPath, yougileTaskId]
+         WHERE workspace_folder = ? AND provider = ? AND remote_task_id = ?`,
+        [localTaskId, now, this.workspaceFolderFsPath, provider, remoteTaskId]
       );
       this.persist();
       return {
@@ -312,17 +376,29 @@ export class TaskRepository {
       };
     }
     this.db.run(
-      `INSERT INTO yougile_task_links (workspace_folder, yougile_task_id, local_task_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [this.workspaceFolderFsPath, yougileTaskId, localTaskId, now, now]
+      `INSERT INTO provider_task_links (workspace_folder, provider, remote_task_id, local_task_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [this.workspaceFolderFsPath, provider, remoteTaskId, localTaskId, now, now]
     );
     this.persist();
     return {
       workspaceFolder: this.workspaceFolderFsPath,
-      yougileTaskId,
+      provider,
+      remoteTaskId,
       localTaskId,
       createdAt: now,
       updatedAt: now,
+    };
+  }
+
+  linkYouGileTaskToLocalTask(yougileTaskId: string, localTaskId: string): YouGileTaskLinkEntity {
+    const link = this.setLinkedLocalTask('yougile', yougileTaskId, localTaskId);
+    return {
+      workspaceFolder: link.workspaceFolder,
+      yougileTaskId: link.remoteTaskId,
+      localTaskId: link.localTaskId,
+      createdAt: link.createdAt,
+      updatedAt: link.updatedAt,
     };
   }
 
@@ -345,6 +421,27 @@ export class TaskRepository {
       baselineCommitHash: input.baselineCommitHash,
     });
     this.linkYouGileTaskToLocalTask(input.yougileTaskId, createdTask.id);
+    return { task: createdTask, created: true };
+  }
+
+  ensureLinkedLocalTaskForProviderTask(input: {
+    provider: ProviderId;
+    remoteTask: UnifiedTaskRef;
+    branchName: string;
+    baselineCommitHash?: string;
+  }): { task: TaskEntity; created: boolean } {
+    const existing = this.getLinkedLocalTask(input.provider, input.remoteTask.remoteId);
+    if (existing) {
+      return { task: existing, created: false };
+    }
+    const createdTask = this.createTask({
+      workspaceFolder: this.workspaceFolderFsPath,
+      branchName: input.branchName,
+      title: input.remoteTask.title,
+      description: input.remoteTask.description,
+      baselineCommitHash: input.baselineCommitHash,
+    });
+    this.setLinkedLocalTask(input.provider, input.remoteTask.remoteId, createdTask.id);
     return { task: createdTask, created: true };
   }
 

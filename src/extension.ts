@@ -3,7 +3,7 @@ import { getCurrentBranch, getHeadCommit } from './git/getCurrentBranch';
 import { GitContentProvider, GIT_CONTENT_SCHEME } from './git/gitContentProvider';
 import { openPromptInCursor } from './chat/createPromptDeeplink';
 import { openTaskRepository, flushAllTaskRepositories } from './db/taskRepository';
-import { TaskChatsProvider, TaskTreeItem, YouGileTaskTreeItem, registerTaskTreeCommands } from './views/taskChatsProvider';
+import { TaskChatsProvider, TaskTreeItem, registerTaskTreeCommands } from './views/taskChatsProvider';
 import { registerGitBranchWatcher } from './watchers/gitBranchWatcher';
 import { t, taskStatusLabel } from './i18n';
 import {
@@ -17,7 +17,12 @@ import {
 } from './cursor/composerStorage';
 import { openComposerWithCursorCommand } from './cursor/openComposer';
 import { buildPromptTextForTask } from './tasks/taskPromptContext';
-import { ensureLinkedLocalTaskForYouGileTask } from './tasks/yougileTaskLinking';
+import { ensureLinkedLocalTaskForProviderTask } from './tasks/yougileTaskLinking';
+import { LocalTaskAdapter } from './providers/localAdapter';
+import { ProviderRegistry } from './providers/providerRegistry';
+import { UnsupportedProviderAdapter } from './providers/unsupportedAdapter';
+import { YouGileAdapter } from './providers/yougileAdapter';
+import type { UnifiedTaskNode } from './providers/types';
 import type { TaskEntity } from './types/taskManager';
 
 async function pickTaskFromBranch(
@@ -46,6 +51,33 @@ async function pickTaskFromBranch(
   return picked?.task;
 }
 
+function isUnifiedTaskNode(value: unknown): value is UnifiedTaskNode {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const taskRef = (value as { taskRef?: unknown }).taskRef;
+  return Boolean(taskRef && typeof taskRef === 'object');
+}
+
+async function resolveLocalTaskForCommandTarget(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+  item?: TaskTreeItem | UnifiedTaskNode
+): Promise<{ task?: TaskEntity; created: boolean }> {
+  if (item instanceof TaskTreeItem) {
+    return { task: item.task, created: false };
+  }
+  if (!isUnifiedTaskNode(item)) {
+    return { task: undefined, created: false };
+  }
+  if (item.taskRef.provider === 'local') {
+    const repo = await openTaskRepository(context, folder);
+    return { task: repo.getTaskById(item.taskRef.remoteId) ?? undefined, created: false };
+  }
+  const linked = await ensureLinkedLocalTaskForProviderTask(context, folder, item.taskRef.provider, item.taskRef);
+  return linked;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const getWorkspaceFolder = (): vscode.WorkspaceFolder | undefined =>
     vscode.workspace.workspaceFolders?.[0];
@@ -54,7 +86,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.registerTextDocumentContentProvider(GIT_CONTENT_SCHEME, new GitContentProvider())
   );
 
-  const provider = new TaskChatsProvider(context, getWorkspaceFolder);
+  const providerRegistry = new ProviderRegistry();
+  providerRegistry.register(new LocalTaskAdapter());
+  providerRegistry.register(new YouGileAdapter());
+  providerRegistry.register(new UnsupportedProviderAdapter('youtrack'));
+  providerRegistry.register(new UnsupportedProviderAdapter('bitrix24'));
+
+  const provider = new TaskChatsProvider(context, providerRegistry, getWorkspaceFolder);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('taskChats.taskChatsView', provider)
   );
@@ -179,53 +217,50 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'cursorTaskChats.openTaskChat',
-      async (item?: TaskTreeItem | YouGileTaskTreeItem) => {
-      const folder = getWorkspaceFolder();
-      if (!folder) {
-        void vscode.window.showWarningMessage(t('messages.noWorkspace'));
-        return;
-      }
-      const repo = await openTaskRepository(context, folder);
-      const branch = await getCurrentBranch(folder);
-      let task = item instanceof TaskTreeItem ? item.task : undefined;
-      if (!task && item instanceof YouGileTaskTreeItem) {
-        const linked = await ensureLinkedLocalTaskForYouGileTask(context, folder, item.task);
-        task = linked.task;
-        if (linked.created) {
+      async (item?: TaskTreeItem | UnifiedTaskNode) => {
+        const folder = getWorkspaceFolder();
+        if (!folder) {
+          void vscode.window.showWarningMessage(t('messages.noWorkspace'));
+          return;
+        }
+        const repo = await openTaskRepository(context, folder);
+        const branch = await getCurrentBranch(folder);
+        const linked = await resolveLocalTaskForCommandTarget(context, folder, item);
+        let task = linked.task;
+        if (task && linked.created) {
           void vscode.window.showInformationMessage(
             t('messages.yougile.link.created', { task: task.title, branch: task.branchName })
           );
         }
-      }
-      if (!task) {
-        task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
-      }
-      if (!task) {
-        return;
-      }
+        if (!task) {
+          task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
+        }
+        if (!task) {
+          return;
+        }
 
-      const previousComposerId = await getSelectedComposerId(context);
-      const startedAt = Date.now();
-      const promptText = await buildPromptTextForTask(context, folder, task);
-      const didOpen = await openPromptInCursor(promptText);
-      if (!didOpen) {
-        void vscode.window.showWarningMessage(t('messages.openTaskChat.openFailed'));
-        return;
-      }
+        const previousComposerId = await getSelectedComposerId(context);
+        const startedAt = Date.now();
+        const promptText = await buildPromptTextForTask(context, folder, task);
+        const didOpen = await openPromptInCursor(promptText);
+        if (!didOpen) {
+          void vscode.window.showWarningMessage(t('messages.openTaskChat.openFailed'));
+          return;
+        }
 
-      const composer = await waitForNewComposer(context, previousComposerId, startedAt);
-      if (!composer) {
-        void vscode.window.showWarningMessage(t('messages.openTaskChat.attachFailed'));
-        return;
-      }
+        const composer = await waitForNewComposer(context, previousComposerId, startedAt);
+        if (!composer) {
+          void vscode.window.showWarningMessage(t('messages.openTaskChat.attachFailed'));
+          return;
+        }
 
-      repo.createTaskChatLink({
-        taskId: task.id,
-        composerId: composer.composerId,
-        promptText,
-        cachedName: composer.name,
-      });
-      provider.refresh();
+        repo.createTaskChatLink({
+          taskId: task.id,
+          composerId: composer.composerId,
+          promptText,
+          cachedName: composer.name,
+        });
+        provider.refresh();
       }
     )
   );
@@ -233,111 +268,108 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'cursorTaskChats.attachCurrentChatToTask',
-      async (item?: TaskTreeItem | YouGileTaskTreeItem) => {
-      const folder = getWorkspaceFolder();
-      if (!folder) {
-        void vscode.window.showWarningMessage(t('messages.noWorkspace'));
-        return;
-      }
-      const repo = await openTaskRepository(context, folder);
-      const branch = await getCurrentBranch(folder);
-      let task = item instanceof TaskTreeItem ? item.task : undefined;
-      if (!task && item instanceof YouGileTaskTreeItem) {
-        const linked = await ensureLinkedLocalTaskForYouGileTask(context, folder, item.task);
-        task = linked.task;
-        if (linked.created) {
+      async (item?: TaskTreeItem | UnifiedTaskNode) => {
+        const folder = getWorkspaceFolder();
+        if (!folder) {
+          void vscode.window.showWarningMessage(t('messages.noWorkspace'));
+          return;
+        }
+        const repo = await openTaskRepository(context, folder);
+        const branch = await getCurrentBranch(folder);
+        const linked = await resolveLocalTaskForCommandTarget(context, folder, item);
+        let task = linked.task;
+        if (task && linked.created) {
           void vscode.window.showInformationMessage(
             t('messages.yougile.link.created', { task: task.title, branch: task.branchName })
           );
         }
-      }
-      if (!task) {
-        task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
-      }
-      if (!task) {
-        return;
-      }
-
-      const [selectedComposerId, activeComposerId, openComposerIds, composerData] = await Promise.all([
-        getSelectedComposerId(context),
-        getActiveComposerId(context),
-        getOpenComposerIds(context),
-        getComposerData(context),
-      ]);
-      const allComposerById = new Map(
-        (composerData?.allComposers ?? []).map((c) => [c.composerId, c])
-      );
-      const composerById = new Map(
-        getRootComposers(composerData).map((c) => [c.composerId, c])
-      );
-
-      const candidateIds = Array.from(
-        new Set(
-          openComposerIds
-            .map((id) => allComposerById.get(id)?.subagentInfo?.parentComposerId ?? id)
-            .concat([selectedComposerId, activeComposerId].filter((id): id is string => Boolean(id)))
-        )
-      );
-
-      let composer = await getSelectedRootComposer(context);
-      if (openComposerIds.length > 1 || candidateIds.length > 1) {
-        const pick = await vscode.window.showQuickPick(
-          candidateIds.map((id) => {
-            const c = composerById.get(id);
-            const isOpen = openComposerIds.some(
-              (openId) => (allComposerById.get(openId)?.subagentInfo?.parentComposerId ?? openId) === id
-            );
-            const source = [
-              isOpen ? 'open' : null,
-              id === selectedComposerId ? 'selected' : null,
-              id === activeComposerId ? 'active' : null,
-            ]
-              .filter((part): part is string => Boolean(part))
-              .join('+');
-            return {
-              label: c?.name ?? `#${id.slice(0, 8)}`,
-              description: source,
-              detail: c?.subtitle,
-              composerId: id,
-            };
-          }),
-          {
-            placeHolder: t('messages.attachCurrent.pickPrompt'),
-            matchOnDescription: true,
-            matchOnDetail: true,
-          }
-        );
-
-        if (!pick) {
+        if (!task) {
+          task = await pickTaskFromBranch(context, folder, branch, 'messages.attachCurrent.pickTask');
+        }
+        if (!task) {
           return;
         }
 
-        composer =
-          composerById.get(pick.composerId) ??
-          { composerId: pick.composerId, name: pick.label, createdAt: Date.now() };
-      }
+        const [selectedComposerId, activeComposerId, openComposerIds, composerData] = await Promise.all([
+          getSelectedComposerId(context),
+          getActiveComposerId(context),
+          getOpenComposerIds(context),
+          getComposerData(context),
+        ]);
+        const allComposerById = new Map(
+          (composerData?.allComposers ?? []).map((c) => [c.composerId, c])
+        );
+        const composerById = new Map(
+          getRootComposers(composerData).map((c) => [c.composerId, c])
+        );
 
-      if (!composer) {
-        void vscode.window.showWarningMessage(t('messages.attachCurrent.openChatFirst'));
-        return;
-      }
+        const candidateIds = Array.from(
+          new Set(
+            openComposerIds
+              .map((id) => allComposerById.get(id)?.subagentInfo?.parentComposerId ?? id)
+              .concat([selectedComposerId, activeComposerId].filter((id): id is string => Boolean(id)))
+          )
+        );
 
-      const promptText = await buildPromptTextForTask(context, folder, task);
-      repo.upsertTaskChatByComposer({
-        taskId: task.id,
-        composerId: composer.composerId,
-        promptText,
-        cachedName: composer.name,
-      });
+        let composer = await getSelectedRootComposer(context);
+        if (openComposerIds.length > 1 || candidateIds.length > 1) {
+          const pick = await vscode.window.showQuickPick(
+            candidateIds.map((id) => {
+              const c = composerById.get(id);
+              const isOpen = openComposerIds.some(
+                (openId) => (allComposerById.get(openId)?.subagentInfo?.parentComposerId ?? openId) === id
+              );
+              const source = [
+                isOpen ? 'open' : null,
+                id === selectedComposerId ? 'selected' : null,
+                id === activeComposerId ? 'active' : null,
+              ]
+                .filter((part): part is string => Boolean(part))
+                .join('+');
+              return {
+                label: c?.name ?? `#${id.slice(0, 8)}`,
+                description: source,
+                detail: c?.subtitle,
+                composerId: id,
+              };
+            }),
+            {
+              placeHolder: t('messages.attachCurrent.pickPrompt'),
+              matchOnDescription: true,
+              matchOnDetail: true,
+            }
+          );
 
-      provider.refresh();
-      setTimeout(() => provider.refresh(), 2500);
-      void vscode.window.showInformationMessage(
-        t('messages.attachCurrent.success', {
-          name: composer.name ?? t('chat.untitled'),
-          task: task.title,
-        })
-      );
+          if (!pick) {
+            return;
+          }
+
+          composer =
+            composerById.get(pick.composerId) ??
+            { composerId: pick.composerId, name: pick.label, createdAt: Date.now() };
+        }
+
+        if (!composer) {
+          void vscode.window.showWarningMessage(t('messages.attachCurrent.openChatFirst'));
+          return;
+        }
+
+        const promptText = await buildPromptTextForTask(context, folder, task);
+        repo.upsertTaskChatByComposer({
+          taskId: task.id,
+          composerId: composer.composerId,
+          promptText,
+          cachedName: composer.name,
+        });
+
+        provider.refresh();
+        setTimeout(() => provider.refresh(), 2500);
+        void vscode.window.showInformationMessage(
+          t('messages.attachCurrent.success', {
+            name: composer.name ?? t('chat.untitled'),
+            task: task.title,
+          })
+        );
       }
     )
   );

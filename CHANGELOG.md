@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-04-29
+
+### Added
+
+- Added a unified task provider layer with shared task models, provider registry, and adapter contract for future YouTrack/Bitrix24 integrations.
+- Added generic `provider_task_links` storage with migration from existing YouGile task links.
+
+### Changed
+
+- Routed YouGile task tree data and common chat/branch actions through the unified provider/task reference layer without changing the visible workflow.
+
 ## [1.2.2] - 2026-04-28
 
 ### Changed
