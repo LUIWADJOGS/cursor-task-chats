@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-04-30
+
+### Added
+
+- Added time record management in the YouGile task details card: create new spent-time records and edit existing ones from the extension UI.
+
+### Changed
+
+- Updated YouGile task details panel to refresh actual time stats after add/edit operations and send `timetracking` commit actions through the extension API layer.
+
 ## [1.2.7] - 2026-04-29
 
 ### Added

@@ -1,4 +1,12 @@
 import * as vscode from 'vscode';
+import {
+  addYouGileSpentTimeRecord,
+  deleteYouGileSpentTimeRecord,
+  editYouGileSpentTimeRecord,
+  getYouGileTaskById,
+  getYouGileTimeStatsBatch,
+  getYouGileIntegrationOptions,
+} from '../integrations/yougileClient';
 import type {
   YouGileColumn,
   YouGileLiveTimer,
@@ -9,6 +17,28 @@ import type {
   YouGileUser,
 } from '../integrations/yougileClient';
 import { t } from '../i18n';
+
+type YouGileTaskDetailPanelOptions = {
+  task: YouGileTask;
+  users: YouGileUser[];
+  columns: YouGileColumn[];
+  stickers: YouGileStringSticker[];
+  taskTimeStats?: YouGileTaskTimeStats;
+  liveTimer?: YouGileLiveTimer;
+  timeDebug?: YouGileTimeStatsDebug;
+  boardId?: string;
+  boardTaskIds?: string[];
+  companyId?: string;
+  onUpdated?: () => void;
+};
+
+type EditableTimeRecord = {
+  userId: string;
+  recordId: string;
+  date: string;
+  duration: number;
+  revision?: string;
+};
 
 function escapeHtml(s: string): string {
   return s
@@ -287,35 +317,141 @@ function renderStickerBadges(stickers: unknown, stickersById: Map<string, YouGil
     .join('');
 }
 
-export async function openYouGileTaskDetailPanel(
-  task: YouGileTask,
-  users: YouGileUser[],
-  columns: YouGileColumn[],
-  stickers: YouGileStringSticker[],
-  taskTimeStats?: YouGileTaskTimeStats,
-  liveTimer?: YouGileLiveTimer,
-  timeDebug?: YouGileTimeStatsDebug
-): Promise<void> {
+export async function openYouGileTaskDetailPanel(options: YouGileTaskDetailPanelOptions): Promise<void> {
+  let {
+    task,
+    users,
+    columns,
+    stickers,
+    taskTimeStats,
+    liveTimer,
+    timeDebug,
+    boardId,
+    boardTaskIds,
+    companyId,
+    onUpdated,
+  } = options;
   const panel = vscode.window.createWebviewPanel(
     'yougileTaskDetails',
     task.title,
     vscode.ViewColumn.One,
-    { enableScripts: false }
+    { enableScripts: true }
   );
 
-  const usersById = new Map(users.map((user) => [user.id, user]));
-  const columnsById = new Map(columns.map((column) => [column.id, column]));
-  const stickersById = new Map(stickers.map((sticker) => [sticker.id, sticker]));
-  panel.webview.html = buildHtml(
-    task,
-    usersById,
-    columnsById,
-    stickersById,
-    panel.webview.cspSource,
-    taskTimeStats,
-    liveTimer,
-    timeDebug
-  );
+  const render = (): void => {
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const columnsById = new Map(columns.map((column) => [column.id, column]));
+    const stickersById = new Map(stickers.map((sticker) => [sticker.id, sticker]));
+    panel.title = task.title;
+    panel.webview.html = buildHtml(
+      task,
+      usersById,
+      columnsById,
+      stickersById,
+      panel.webview.cspSource,
+      taskTimeStats,
+      liveTimer,
+      timeDebug,
+      boardId,
+      boardTaskIds
+    );
+  };
+
+  const refreshTimeData = async (): Promise<void> => {
+    if (!boardId) {
+      return;
+    }
+    const refreshedTask = await getYouGileTaskById(task.id);
+    if (refreshedTask) {
+      task = refreshedTask;
+    }
+    const response = await getYouGileTimeStatsBatch(boardId, boardTaskIds ?? [task.id], {
+      userId: getYouGileIntegrationOptions().assigneeId,
+      companyId,
+    });
+    taskTimeStats = response.taskStats[task.id];
+    liveTimer = response.liveTimers.find((timer) => timer.taskId === task.id);
+    timeDebug = response.debug;
+  };
+
+  panel.webview.onDidReceiveMessage(async (message: Record<string, unknown>) => {
+    const type = typeof message.type === 'string' ? message.type : '';
+    if (
+      type !== 'yougile.addTimeRecord' &&
+      type !== 'yougile.editTimeRecord' &&
+      type !== 'yougile.deleteTimeRecord'
+    ) {
+      return;
+    }
+    if (!boardId) {
+      void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.missingBoard'));
+      return;
+    }
+    const userId = typeof message.userId === 'string' ? message.userId.trim() : '';
+    const date = typeof message.date === 'string' ? message.date.trim() : '';
+    const duration = typeof message.duration === 'number' ? message.duration : Number(message.duration);
+    try {
+      if (type === 'yougile.addTimeRecord') {
+        if (!userId || !date || !Number.isFinite(duration) || duration <= 0) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
+          return;
+        }
+        await addYouGileSpentTimeRecord({
+          boardId,
+          taskId: task.id,
+          taskIds: boardTaskIds ?? [task.id],
+          userId,
+          date,
+          duration,
+          companyId,
+        });
+      } else if (type === 'yougile.editTimeRecord') {
+        const recordId = typeof message.recordId === 'string' ? message.recordId.trim() : '';
+        if (!recordId || !userId || !date || !Number.isFinite(duration) || duration <= 0) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
+          return;
+        }
+        const revision = typeof message.revision === 'string' ? message.revision.trim() : undefined;
+        await editYouGileSpentTimeRecord({
+          boardId,
+          taskId: task.id,
+          taskIds: boardTaskIds ?? [task.id],
+          userId,
+          recordId,
+          date,
+          duration,
+          revision,
+          companyId,
+        });
+      } else {
+        const recordId = typeof message.recordId === 'string' ? message.recordId.trim() : '';
+        if (!recordId || !userId) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
+          return;
+        }
+        await deleteYouGileSpentTimeRecord({
+          boardId,
+          taskId: task.id,
+          taskIds: boardTaskIds ?? [task.id],
+          userId,
+          recordId,
+          companyId,
+        });
+      }
+      await refreshTimeData();
+      onUpdated?.();
+      render();
+      void vscode.window.showInformationMessage(t('yougile.detail.timeEdit.saved'));
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('yougile.detail.timeEdit.failed', {
+          message: error instanceof Error ? error.message : String(error),
+        })
+      );
+    }
+  });
+
+  render();
 }
 
 function buildMetaRows(
@@ -595,6 +731,122 @@ function renderActualTimeSection(
   `;
 }
 
+function toInputDateTime(iso?: string): string {
+  if (!iso) {
+    return '';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  const local = new Date(date.getTime() - offsetMs);
+  return local.toISOString().slice(0, 16);
+}
+
+function serializeForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
+function collectEditableRecords(taskTimeStats?: YouGileTaskTimeStats): EditableTimeRecord[] {
+  if (!taskTimeStats) {
+    return [];
+  }
+  const output: EditableTimeRecord[] = [];
+  for (const [userId, stats] of Object.entries(taskTimeStats.users)) {
+    for (const record of stats.records) {
+      output.push({
+        userId,
+        recordId: record.id,
+        date: record.date ?? '',
+        duration: record.duration,
+        revision: record.revision,
+      });
+    }
+  }
+  return output.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+function renderTimeEditSection(
+  usersById: Map<string, YouGileUser>,
+  taskTimeStats: YouGileTaskTimeStats | undefined,
+  boardId: string | undefined
+): string {
+  const users = Array.from(usersById.values())
+    .map((user) => ({
+      id: user.id,
+      label: user.realName ?? user.name ?? user.email ?? user.id,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const defaultUserId =
+    getYouGileIntegrationOptions().assigneeId ??
+    users[0]?.id ??
+    '';
+  const records = collectEditableRecords(taskTimeStats);
+  const recordRows = records
+    .map((record) => {
+      const userLabel = resolveAssigneeLabel(record.userId, usersById);
+      return `
+        <div class="record-row-edit">
+          <span>${escapeHtml(formatIsoDateTime(record.date))}</span>
+          <span>${escapeHtml(userLabel)}</span>
+          <span>${escapeHtml(formatDuration(record.duration))}</span>
+          <button type="button" class="btn-mini" data-edit-record-id="${escapeHtml(record.recordId)}">${escapeHtml(t('yougile.detail.timeEdit.edit'))}</button>
+          <button type="button" class="btn-mini btn-danger" data-delete-record-id="${escapeHtml(record.recordId)}" data-delete-user-id="${escapeHtml(record.userId)}">${escapeHtml(t('yougile.detail.timeEdit.delete'))}</button>
+        </div>
+      `;
+    })
+    .join('');
+  return `
+    <section class="card">
+      <h2>${escapeHtml(t('yougile.detail.timeEdit.title'))}</h2>
+      ${
+        boardId
+          ? ''
+          : `<div class="empty">${escapeHtml(t('yougile.detail.timeEdit.missingBoard'))}</div>`
+      }
+      <div class="time-edit-grid ${boardId ? '' : 'is-disabled'}">
+        <div class="meta-item">
+          <div class="meta-label">${escapeHtml(t('yougile.detail.timeEdit.user'))}</div>
+          <select id="timeRecordUser" ${boardId ? '' : 'disabled'}>
+            ${users
+              .map(
+                (entry) =>
+                  `<option value="${escapeHtml(entry.id)}" ${entry.id === defaultUserId ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`
+              )
+              .join('')}
+          </select>
+          <div class="meta-label" style="margin-top:8px;">${escapeHtml(t('yougile.detail.timeEdit.date'))}</div>
+          <input type="datetime-local" id="timeRecordDate" value="${escapeHtml(toInputDateTime(new Date().toISOString()))}" ${boardId ? '' : 'disabled'} />
+          <div class="meta-label" style="margin-top:8px;">${escapeHtml(t('yougile.detail.timeEdit.durationSeconds'))}</div>
+          <input type="number" min="1" step="1" id="timeRecordDuration" value="3600" ${boardId ? '' : 'disabled'} />
+          <button type="button" class="btn-mini" id="addTimeRecordBtn" ${boardId ? '' : 'disabled'}>${escapeHtml(t('yougile.detail.timeEdit.add'))}</button>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">${escapeHtml(t('yougile.detail.timeEdit.records'))}</div>
+          ${
+            recordRows
+              ? `<div class="records-edit-list">${recordRows}</div>`
+              : `<div class="empty">${escapeHtml(t('yougile.detail.emptyTimeRecords'))}</div>`
+          }
+          <div id="timeRecordEditPanel" class="time-record-edit-panel" hidden>
+            <div class="meta-label" style="margin-top:8px;">${escapeHtml(t('yougile.detail.timeEdit.editMode'))}</div>
+            <input type="hidden" id="editRecordId" />
+            <input type="hidden" id="editRecordRevision" />
+            <button type="button" class="btn-mini" id="saveEditTimeRecordBtn" ${boardId ? '' : 'disabled'}>${escapeHtml(t('yougile.detail.timeEdit.saveEdit'))}</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script>
+      const __timeRecords = ${serializeForScript(records)};
+    </script>
+  `;
+}
+
 function renderTimeTrackingDebugSection(debug?: YouGileTimeStatsDebug): string {
   if (!debug) {
     return '';
@@ -695,7 +947,9 @@ function buildHtml(
   cspSource: string,
   taskTimeStats?: YouGileTaskTimeStats,
   liveTimer?: YouGileLiveTimer,
-  timeDebug?: YouGileTimeStatsDebug
+  timeDebug?: YouGileTimeStatsDebug,
+  boardId?: string,
+  boardTaskIds?: string[]
 ): string {
   const config = vscode.workspace.getConfiguration('cursorTaskChats');
   const showDebugPanels =
@@ -722,7 +976,7 @@ function buildHtml(
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
   <style>
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 18px; margin: 0; }
     .layout { display: grid; gap: 14px; max-width: 960px; margin: 0 auto; }
@@ -777,6 +1031,14 @@ function buildHtml(
     .checklist-item { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
     .checklist-item.done { color: var(--vscode-descriptionForeground); text-decoration: line-through; }
     .checkbox { color: var(--vscode-textLink-foreground); flex: 0 0 auto; }
+    .time-edit-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px; }
+    .time-edit-grid.is-disabled { opacity: .7; pointer-events: none; }
+    .records-edit-list { display:grid; gap:6px; }
+    .record-row-edit { display:grid; grid-template-columns: 1fr 1fr auto auto auto; gap:8px; align-items:center; padding:6px 0; border-bottom:1px dashed var(--vscode-widget-border, transparent); }
+    .record-row-edit:last-child { border-bottom: 0; }
+    .btn-mini { margin-top:8px; border:1px solid var(--vscode-button-border, var(--vscode-widget-border, transparent)); background: transparent; color: var(--vscode-foreground); border-radius:6px; padding:6px 8px; cursor:pointer; font: inherit; }
+    .btn-danger { color: var(--vscode-errorForeground); border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, var(--vscode-widget-border, transparent)); }
+    .time-record-edit-panel { margin-top:10px; padding-top:8px; border-top:1px dashed var(--vscode-widget-border, transparent); }
   </style>
 </head>
 <body>
@@ -799,10 +1061,96 @@ function buildHtml(
     ${showDebugPanels ? renderJsonSection(t('yougile.detail.deadline'), deadline, t('yougile.detail.emptyDeadline')) : ''}
     ${showDebugPanels ? renderTimeTrackingSection(timeTracking, taskTimeStats) : ''}
     ${showDebugPanels ? renderActualTimeSection(usersById, taskTimeStats, liveTimer) : ''}
+    ${renderTimeEditSection(usersById, taskTimeStats, boardId)}
     ${showDebugPanels ? renderTimeTrackingDebugSection(timeDebug) : ''}
     ${renderChecklistsSection(checklists)}
     ${showDebugPanels ? renderJsonSection(t('yougile.detail.raw'), task.raw, t('yougile.detail.emptyRaw')) : ''}
   </div>
+  <script>
+    const vscode = acquireVsCodeApi();
+    const boardId = ${serializeForScript(boardId ?? '')};
+    const boardTaskIds = ${serializeForScript(boardTaskIds ?? [task.id])};
+    const addBtn = document.getElementById('addTimeRecordBtn');
+    const saveEditBtn = document.getElementById('saveEditTimeRecordBtn');
+    const userField = document.getElementById('timeRecordUser');
+    const dateField = document.getElementById('timeRecordDate');
+    const durationField = document.getElementById('timeRecordDuration');
+    const editPanel = document.getElementById('timeRecordEditPanel');
+    const editRecordIdField = document.getElementById('editRecordId');
+    const editRecordRevisionField = document.getElementById('editRecordRevision');
+    const parseDateToIso = (value) => {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+    };
+
+    const openEdit = (recordId) => {
+      if (!Array.isArray(__timeRecords)) {
+        return;
+      }
+      const record = __timeRecords.find((entry) => entry.recordId === recordId);
+      if (!record) {
+        return;
+      }
+      userField.value = record.userId;
+      const date = new Date(record.date);
+      if (!Number.isNaN(date.getTime())) {
+        const offsetMs = date.getTimezoneOffset() * 60000;
+        dateField.value = new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+      }
+      durationField.value = String(record.duration);
+      editRecordIdField.value = record.recordId;
+      editRecordRevisionField.value = record.revision || '';
+      editPanel.hidden = false;
+    };
+
+    document.querySelectorAll('[data-edit-record-id]').forEach((button) => {
+      button.addEventListener('click', () => openEdit(button.dataset.editRecordId));
+    });
+    document.querySelectorAll('[data-delete-record-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const recordId = button.dataset.deleteRecordId;
+        const userId = button.dataset.deleteUserId;
+        if (!recordId || !userId) {
+          return;
+        }
+        if (!confirm(${serializeForScript(t('yougile.detail.timeEdit.deleteConfirm'))})) {
+          return;
+        }
+        vscode.postMessage({
+          type: 'yougile.deleteTimeRecord',
+          boardId,
+          boardTaskIds,
+          userId,
+          recordId,
+        });
+      });
+    });
+
+    addBtn?.addEventListener('click', () => {
+      vscode.postMessage({
+        type: 'yougile.addTimeRecord',
+        boardId,
+        boardTaskIds,
+        userId: userField.value,
+        date: parseDateToIso(dateField.value),
+        duration: Number(durationField.value),
+      });
+    });
+
+    saveEditBtn?.addEventListener('click', () => {
+      vscode.postMessage({
+        type: 'yougile.editTimeRecord',
+        boardId,
+        boardTaskIds,
+        userId: userField.value,
+        date: parseDateToIso(dateField.value),
+        duration: Number(durationField.value),
+        recordId: editRecordIdField.value,
+        revision: editRecordRevisionField.value || undefined,
+      });
+    });
+  </script>
 </body>
 </html>`;
 }

@@ -212,6 +212,21 @@ export type TranslationKey =
   | 'yougile.detail.timeTotal'
   | 'yougile.detail.timeRecords'
   | 'yougile.detail.emptyTimeRecords'
+  | 'yougile.detail.timeEdit.title'
+  | 'yougile.detail.timeEdit.user'
+  | 'yougile.detail.timeEdit.date'
+  | 'yougile.detail.timeEdit.durationSeconds'
+  | 'yougile.detail.timeEdit.add'
+  | 'yougile.detail.timeEdit.edit'
+  | 'yougile.detail.timeEdit.delete'
+  | 'yougile.detail.timeEdit.deleteConfirm'
+  | 'yougile.detail.timeEdit.records'
+  | 'yougile.detail.timeEdit.editMode'
+  | 'yougile.detail.timeEdit.saveEdit'
+  | 'yougile.detail.timeEdit.saved'
+  | 'yougile.detail.timeEdit.failed'
+  | 'yougile.detail.timeEdit.invalidInput'
+  | 'yougile.detail.timeEdit.missingBoard'
   | 'yougile.detail.liveTimer'
   | 'yougile.detail.liveTimerStart'
   | 'yougile.detail.liveTimerDuration'
@@ -475,6 +490,21 @@ const en: Translations = {
   'yougile.detail.timeTotal': 'Total',
   'yougile.detail.timeRecords': 'Records',
   'yougile.detail.emptyTimeRecords': 'No records',
+  'yougile.detail.timeEdit.title': 'Edit time records',
+  'yougile.detail.timeEdit.user': 'User',
+  'yougile.detail.timeEdit.date': 'Date',
+  'yougile.detail.timeEdit.durationSeconds': 'Duration (seconds)',
+  'yougile.detail.timeEdit.add': 'Add record',
+  'yougile.detail.timeEdit.edit': 'Edit',
+  'yougile.detail.timeEdit.delete': 'Delete',
+  'yougile.detail.timeEdit.deleteConfirm': 'Delete this time record?',
+  'yougile.detail.timeEdit.records': 'Existing records',
+  'yougile.detail.timeEdit.editMode': 'Editing selected record',
+  'yougile.detail.timeEdit.saveEdit': 'Save changes',
+  'yougile.detail.timeEdit.saved': 'Time record saved.',
+  'yougile.detail.timeEdit.failed': 'Failed to save time record: {message}',
+  'yougile.detail.timeEdit.invalidInput': 'Fill user, date and duration (> 0).',
+  'yougile.detail.timeEdit.missingBoard': 'Task board context is missing. Reopen task details from tree.',
   'yougile.detail.liveTimer': 'Live timer',
   'yougile.detail.liveTimerStart': 'Started at',
   'yougile.detail.liveTimerDuration': 'Current duration',
@@ -738,6 +768,21 @@ const ru: Translations = {
   'yougile.detail.timeTotal': 'Итого',
   'yougile.detail.timeRecords': 'Записи',
   'yougile.detail.emptyTimeRecords': 'Записи отсутствуют',
+  'yougile.detail.timeEdit.title': 'Редактирование времени',
+  'yougile.detail.timeEdit.user': 'Пользователь',
+  'yougile.detail.timeEdit.date': 'Дата',
+  'yougile.detail.timeEdit.durationSeconds': 'Длительность (сек)',
+  'yougile.detail.timeEdit.add': 'Добавить запись',
+  'yougile.detail.timeEdit.edit': 'Изменить',
+  'yougile.detail.timeEdit.delete': 'Удалить',
+  'yougile.detail.timeEdit.deleteConfirm': 'Удалить эту запись времени?',
+  'yougile.detail.timeEdit.records': 'Существующие записи',
+  'yougile.detail.timeEdit.editMode': 'Редактирование выбранной записи',
+  'yougile.detail.timeEdit.saveEdit': 'Сохранить изменения',
+  'yougile.detail.timeEdit.saved': 'Запись времени сохранена.',
+  'yougile.detail.timeEdit.failed': 'Не удалось сохранить запись времени: {message}',
+  'yougile.detail.timeEdit.invalidInput': 'Заполни пользователя, дату и длительность (> 0).',
+  'yougile.detail.timeEdit.missingBoard': 'Не найден контекст доски. Открой карточку задачи из дерева заново.',
   'yougile.detail.liveTimer': 'Активный таймер',
   'yougile.detail.liveTimerStart': 'Старт',
   'yougile.detail.liveTimerDuration': 'Текущая длительность',

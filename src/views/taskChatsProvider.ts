@@ -1494,6 +1494,9 @@ export function registerTaskTreeCommands(
       let taskTimeStats: YouGileTaskTimeStats | undefined;
       let liveTimer: YouGileLiveTimer | undefined;
       let timeDebug: YouGileTimeStatsDebug | undefined;
+      let boardId: string | undefined;
+      let boardTaskIds: string[] = [item.task.id];
+      let companyId: string | undefined;
       try {
         const [freshTask, allUsers, allColumns, allStickers] = await Promise.all([
           getYouGileTaskById(item.task.id),
@@ -1507,12 +1510,18 @@ export function registerTaskTreeCommands(
         users = allUsers;
         columns = allColumns;
         stickers = allStickers;
+        const timerContext = await provider.getYouGileTimerContext(task.id);
+        boardId = timerContext?.boardId;
+        boardTaskIds = timerContext?.taskIds ?? [task.id];
+        companyId = timerContext?.companyId ?? readCompanyIdFromTask(task);
         const boardIdByColumnId = new Map(allColumns.map((column) => [column.id, column.boardId]));
-        const boardId = task.columnId ? boardIdByColumnId.get(task.columnId) : undefined;
+        if (!boardId) {
+          boardId = task.columnId ? boardIdByColumnId.get(task.columnId) : undefined;
+        }
         if (boardId) {
-          const timeData = await getYouGileTimeStatsBatch(boardId, [task.id], {
+          const timeData = await getYouGileTimeStatsBatch(boardId, boardTaskIds, {
             userId: getYouGileIntegrationOptions().assigneeId,
-            companyId: readCompanyIdFromTask(task),
+            companyId,
           });
           taskTimeStats = timeData.taskStats[task.id];
           liveTimer = timeData.liveTimers.find((timer) => timer.taskId === task.id);
@@ -1533,7 +1542,19 @@ export function registerTaskTreeCommands(
           error: error instanceof Error ? error.message : String(error),
         };
       }
-      await openYouGileTaskDetailPanel(task, users, columns, stickers, taskTimeStats, liveTimer, timeDebug);
+      await openYouGileTaskDetailPanel({
+        task,
+        users,
+        columns,
+        stickers,
+        taskTimeStats,
+        liveTimer,
+        timeDebug,
+        boardId,
+        boardTaskIds,
+        companyId,
+        onUpdated: () => provider.refresh(),
+      });
     })
   );
 

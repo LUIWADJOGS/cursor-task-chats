@@ -1372,6 +1372,152 @@ export async function stopYouGileLiveTimer(options: {
   });
 }
 
+export async function addYouGileSpentTimeRecord(options: {
+  boardId: string;
+  taskId: string;
+  taskIds: string[];
+  userId: string;
+  date: string;
+  duration: number;
+  recordId?: string;
+  revision?: string;
+  companyId?: string;
+}): Promise<{ recordId: string; revision: string }> {
+  const config = resolveExtensionRequestConfig(options);
+  const recordId = options.recordId?.trim() || createTimerRecordId();
+  const revision = options.revision?.trim() || new Date().toISOString();
+  const taskIds = Array.from(new Set([options.taskId, ...options.taskIds]));
+  const payload = {
+    userId: config.userId,
+    key: config.userKey,
+    companyId: config.companyId,
+    extension: 'timetracking',
+    prop: 'commit',
+    args: [
+      {
+        type: 'AddSpentTimeRecordForTask',
+        data: {
+          taskId: options.taskId,
+          userId: options.userId,
+          date: options.date,
+          duration: Math.max(0, Math.floor(options.duration)),
+          revision,
+          recordId,
+        },
+        boardId: options.boardId,
+        userId: config.userId,
+        taskIds,
+      },
+    ],
+    v: config.v,
+    appVersion: config.appVersion,
+    clientType: config.clientType,
+  };
+  await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/extension/exec'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return { recordId, revision };
+}
+
+export async function editYouGileSpentTimeRecord(options: {
+  boardId: string;
+  taskId: string;
+  taskIds: string[];
+  userId: string;
+  recordId: string;
+  date: string;
+  duration: number;
+  revision?: string;
+  companyId?: string;
+}): Promise<{ revision: string }> {
+  const config = resolveExtensionRequestConfig(options);
+  const revision = options.revision?.trim() || new Date().toISOString();
+  const taskIds = Array.from(new Set([options.taskId, ...options.taskIds]));
+  const payload = {
+    userId: config.userId,
+    key: config.userKey,
+    companyId: config.companyId,
+    extension: 'timetracking',
+    prop: 'commit',
+    args: [
+      {
+        type: 'EditSpentTimeRecordForTask',
+        data: {
+          taskId: options.taskId,
+          userId: options.userId,
+          recordId: options.recordId,
+          date: options.date,
+          duration: Math.max(0, Math.floor(options.duration)),
+          revision,
+        },
+        boardId: options.boardId,
+        userId: config.userId,
+        taskIds,
+      },
+    ],
+    v: config.v,
+    appVersion: config.appVersion,
+    clientType: config.clientType,
+  };
+  await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/extension/exec'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return { revision };
+}
+
+export async function deleteYouGileSpentTimeRecord(options: {
+  boardId: string;
+  taskId: string;
+  taskIds: string[];
+  userId: string;
+  recordId: string;
+  companyId?: string;
+}): Promise<void> {
+  const config = resolveExtensionRequestConfig(options);
+  const taskIds = Array.from(new Set([options.taskId, ...options.taskIds]));
+  const payload = {
+    userId: config.userId,
+    key: config.userKey,
+    companyId: config.companyId,
+    extension: 'timetracking',
+    prop: 'commit',
+    args: [
+      {
+        type: 'DeleteSpentTimeRecordForTask',
+        data: {
+          taskId: options.taskId,
+          userId: options.userId,
+          recordId: options.recordId,
+        },
+        boardId: options.boardId,
+        userId: config.userId,
+        taskIds,
+      },
+    ],
+    v: config.v,
+    appVersion: config.appVersion,
+    clientType: config.clientType,
+  };
+  await requestJsonWithOptions<unknown>(new URL('https://yougile.com/data/extension/exec'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function setYouGileAssigneeFilter(
   assigneeId?: string
 ): Promise<void> {
