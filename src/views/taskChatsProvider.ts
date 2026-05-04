@@ -50,6 +50,27 @@ import {
   type YouGileUser,
 } from '../integrations/yougileClient';
 
+let perfLogChannel: vscode.OutputChannel | undefined;
+
+function isYouGilePerfDebugEnabled(): boolean {
+  const cfg = vscode.workspace.getConfiguration('cursorTaskChats');
+  return Boolean(
+    cfg.get<boolean>('yougile.showDebugPanels') ??
+      cfg.get<boolean>('yougile.showRawPayloadInDetails') ??
+      false
+  );
+}
+
+function perfLog(message: string): void {
+  if (!isYouGilePerfDebugEnabled()) {
+    return;
+  }
+  if (!perfLogChannel) {
+    perfLogChannel = vscode.window.createOutputChannel('Task Chats Debug');
+  }
+  perfLogChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
+}
+
 export type TaskTreeNode =
   | BranchRootTreeItem
   | TaskTreeItem
@@ -408,34 +429,36 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
   }
 
   async getChildren(element?: TaskTreeNode): Promise<TaskTreeNode[]> {
+    const t0 = Date.now();
     const folder = this.getWorkspaceFolder();
     if (!folder) {
       return [];
     }
 
     const activeProviderId = this.providerRegistry.getActiveProviderId();
-    if (activeProviderId === 'yougile') {
-      return this.getYouGileChildren(element);
-    }
-    if (activeProviderId !== 'local') {
-      try {
-        await this.providerRegistry.getActive().listTree();
-      } catch (error) {
-        if (!this.yougileErrorShown) {
-          this.yougileErrorShown = true;
-          void vscode.window.showWarningMessage(error instanceof Error ? error.message : String(error));
-        }
+    try {
+      if (activeProviderId === 'yougile') {
+        return this.getYouGileChildren(element);
       }
-      return [];
-    }
+      if (activeProviderId !== 'local') {
+        try {
+          await this.providerRegistry.getActive().listTree();
+        } catch (error) {
+          if (!this.yougileErrorShown) {
+            this.yougileErrorShown = true;
+            void vscode.window.showWarningMessage(error instanceof Error ? error.message : String(error));
+          }
+        }
+        return [];
+      }
 
-    const repo = await openTaskRepository(this.context, folder);
-    const branch = await getCurrentBranch(folder);
-    const workspacePath = folder.uri.fsPath;
+      const repo = await openTaskRepository(this.context, folder);
+      const branch = await getCurrentBranch(folder);
+      const workspacePath = folder.uri.fsPath;
 
-    if (!element) {
-      return [new BranchRootTreeItem(branch)];
-    }
+      if (!element) {
+        return [new BranchRootTreeItem(branch)];
+      }
 
     if (element instanceof BranchRootTreeItem) {
       const roots = repo.getRootTasksForBranch(branch);
@@ -529,7 +552,12 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
       return [...subItems, ...chatItems];
     }
 
-    return [];
+      return [];
+    } finally {
+      perfLog(
+        `getChildren provider=${activeProviderId} element=${element?.constructor?.name ?? 'root'} took=${Date.now() - t0}ms`
+      );
+    }
   }
 
   private async getYouGileChildren(element?: TaskTreeNode): Promise<TaskTreeNode[]> {
@@ -727,8 +755,10 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
     }
 
     try {
+      const tFetch = Date.now();
       const adapter = this.providerRegistry.get('yougile') as TaskProviderAdapter<YouGileProviderTreeData>;
       const source = (await adapter.listTree()).yougile;
+      perfLog(`yougileTree fetchSource tasks=${source.tasks.length} took=${Date.now() - tFetch}ms`);
       const options = getYouGileIntegrationOptions();
       const tasks = source.tasks;
       const boards = source.boards;
@@ -826,7 +856,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
           }
         }
       }
+      const tStats = Date.now();
       for (const [boardId, taskIds] of taskIdsByBoardId.entries()) {
+        const tBoard = Date.now();
         try {
           const timeData = await getYouGileTimeStatsBatch(boardId, taskIds, {
             userId: options.assigneeId,
@@ -849,7 +881,9 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         } catch {
           // Do not block tree rendering if extension endpoint is unavailable.
         }
+        perfLog(`yougileTree boardStats board=${boardId} tasks=${taskIds.length} took=${Date.now() - tBoard}ms`);
       }
+      perfLog(`yougileTree allBoardStats boards=${taskIdsByBoardId.size} took=${Date.now() - tStats}ms`);
       const folder = this.getWorkspaceFolder();
       if (folder && tasks.length > 0) {
         const repo = await openTaskRepository(this.context, folder);
@@ -1487,6 +1521,7 @@ export function registerTaskTreeCommands(
       if (!item) {
         return;
       }
+      const tOpenDetails = Date.now();
       let task = item.task;
       let users: YouGileUser[] = [];
       let columns: YouGileColumn[] = [];
@@ -1498,31 +1533,33 @@ export function registerTaskTreeCommands(
       let boardTaskIds: string[] = [item.task.id];
       let companyId: string | undefined;
       try {
+        const tMeta = Date.now();
         const [freshTask, allUsers, allColumns, allStickers] = await Promise.all([
           getYouGileTaskById(item.task.id),
           getYouGileUsers(),
           getYouGileColumns(),
           getYouGileStringStickers(),
         ]);
+        perfLog(`yougileDetails metaLoad task=${item.task.id} took=${Date.now() - tMeta}ms`);
         if (freshTask) {
           task = freshTask;
         }
         users = allUsers;
         columns = allColumns;
         stickers = allStickers;
-        const timerContext = await provider.getYouGileTimerContext(task.id);
-        boardId = timerContext?.boardId;
-        boardTaskIds = timerContext?.taskIds ?? [task.id];
-        companyId = timerContext?.companyId ?? readCompanyIdFromTask(task);
         const boardIdByColumnId = new Map(allColumns.map((column) => [column.id, column.boardId]));
         if (!boardId) {
           boardId = task.columnId ? boardIdByColumnId.get(task.columnId) : undefined;
         }
+        boardTaskIds = [task.id];
+        companyId = readCompanyIdFromTask(task);
         if (boardId) {
+          const tBatch = Date.now();
           const timeData = await getYouGileTimeStatsBatch(boardId, boardTaskIds, {
             userId: getYouGileIntegrationOptions().assigneeId,
             companyId,
           });
+          perfLog(`yougileDetails timeBatch task=${task.id} board=${boardId} tasks=${boardTaskIds.length} took=${Date.now() - tBatch}ms`);
           taskTimeStats = timeData.taskStats[task.id];
           liveTimer = timeData.liveTimers.find((timer) => timer.taskId === task.id);
           timeDebug = timeData.debug;
@@ -1542,6 +1579,7 @@ export function registerTaskTreeCommands(
           error: error instanceof Error ? error.message : String(error),
         };
       }
+      perfLog(`yougileDetails openPanel task=${task.id} total=${Date.now() - tOpenDetails}ms`);
       await openYouGileTaskDetailPanel({
         task,
         users,

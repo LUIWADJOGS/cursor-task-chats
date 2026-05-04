@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-05-01
+
+### Added
+
+- Added deleting spent-time records from the YouGile task details card.
+
+### Changed
+
+- Reworked time editing UX in YouGile task details: compact icon-based controls, `HH:MM` duration format, and editing block opened on demand from the time summary in the header.
+- Added optional performance timing logs for YouGile tree/details loading in `Task Chats Debug` (enabled via YouGile debug settings).
+
 ## [1.2.8] - 2026-04-30
 
 ### Added

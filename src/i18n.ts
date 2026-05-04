@@ -220,6 +220,7 @@ export type TranslationKey =
   | 'yougile.detail.timeEdit.edit'
   | 'yougile.detail.timeEdit.delete'
   | 'yougile.detail.timeEdit.deleteConfirm'
+  | 'yougile.detail.timeEdit.cancel'
   | 'yougile.detail.timeEdit.records'
   | 'yougile.detail.timeEdit.editMode'
   | 'yougile.detail.timeEdit.saveEdit'
@@ -498,6 +499,7 @@ const en: Translations = {
   'yougile.detail.timeEdit.edit': 'Edit',
   'yougile.detail.timeEdit.delete': 'Delete',
   'yougile.detail.timeEdit.deleteConfirm': 'Delete this time record?',
+  'yougile.detail.timeEdit.cancel': 'Cancel',
   'yougile.detail.timeEdit.records': 'Existing records',
   'yougile.detail.timeEdit.editMode': 'Editing selected record',
   'yougile.detail.timeEdit.saveEdit': 'Save changes',
@@ -776,6 +778,7 @@ const ru: Translations = {
   'yougile.detail.timeEdit.edit': 'Изменить',
   'yougile.detail.timeEdit.delete': 'Удалить',
   'yougile.detail.timeEdit.deleteConfirm': 'Удалить эту запись времени?',
+  'yougile.detail.timeEdit.cancel': 'Отмена',
   'yougile.detail.timeEdit.records': 'Существующие записи',
   'yougile.detail.timeEdit.editMode': 'Редактирование выбранной записи',
   'yougile.detail.timeEdit.saveEdit': 'Сохранить изменения',
