@@ -227,6 +227,9 @@ export type TranslationKey =
   | 'yougile.detail.timeEdit.saved'
   | 'yougile.detail.timeEdit.failed'
   | 'yougile.detail.timeEdit.invalidInput'
+  | 'yougile.detail.timeEdit.invalidUser'
+  | 'yougile.detail.timeEdit.invalidDate'
+  | 'yougile.detail.timeEdit.invalidDuration'
   | 'yougile.detail.timeEdit.missingBoard'
   | 'yougile.detail.liveTimer'
   | 'yougile.detail.liveTimerStart'
@@ -505,7 +508,11 @@ const en: Translations = {
   'yougile.detail.timeEdit.saveEdit': 'Save changes',
   'yougile.detail.timeEdit.saved': 'Time record saved.',
   'yougile.detail.timeEdit.failed': 'Failed to save time record: {message}',
-  'yougile.detail.timeEdit.invalidInput': 'Fill user, date and duration (> 0).',
+  'yougile.detail.timeEdit.invalidInput': 'Incomplete time record form.',
+  'yougile.detail.timeEdit.invalidUser': 'Choose a user in the drop-down.',
+  'yougile.detail.timeEdit.invalidDate': 'Pick a valid date and time.',
+  'yougile.detail.timeEdit.invalidDuration':
+    'Enter duration as hours:minutes (for example 1:30 or 100:05), greater than zero.',
   'yougile.detail.timeEdit.missingBoard': 'Task board context is missing. Reopen task details from tree.',
   'yougile.detail.liveTimer': 'Live timer',
   'yougile.detail.liveTimerStart': 'Started at',
@@ -784,7 +791,11 @@ const ru: Translations = {
   'yougile.detail.timeEdit.saveEdit': 'Сохранить изменения',
   'yougile.detail.timeEdit.saved': 'Запись времени сохранена.',
   'yougile.detail.timeEdit.failed': 'Не удалось сохранить запись времени: {message}',
-  'yougile.detail.timeEdit.invalidInput': 'Заполни пользователя, дату и длительность (> 0).',
+  'yougile.detail.timeEdit.invalidInput': 'Форма записи времени заполнена не полностью.',
+  'yougile.detail.timeEdit.invalidUser': 'Выбери пользователя в списке.',
+  'yougile.detail.timeEdit.invalidDate': 'Укажи корректную дату и время.',
+  'yougile.detail.timeEdit.invalidDuration':
+    'Длительность в формате часы:минуты (например 1:30 или 100:05), больше нуля.',
   'yougile.detail.timeEdit.missingBoard': 'Не найден контекст доски. Открой карточку задачи из дерева заново.',
   'yougile.detail.liveTimer': 'Активный таймер',
   'yougile.detail.liveTimerStart': 'Старт',

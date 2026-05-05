@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<<<<<<< HEAD
-## [1.2.9] - 2026-05-01
+## [1.2.11] - 2026-05-06
+
+### Changed
+
+- YouGile task details: add-time form only appears after ➕ (default user from extension settings); edit switches the same row to inline date/duration fields — no separate edit row and the record owner is not changed.
+
+### Fixed
+
+- YouGile time form: correct handling of duration from the webview (NaN was sent as null and read as 0), clearer validation messages, flexible `H:MM` duration parsing, and user list includes extension/assignee/task contacts when the company user directory is empty.
+
+## [1.2.10] - 2026-05-06
+
+### Fixed
+
+- YouGile spent-time `commit`: nested `userId` matches `data.userId`, and `taskIds` uses board-scoped ids from cached tree data so add/edit/delete time records are accepted by the timetracking API.
+
+## [1.2.9] - 2026-05-04
 
 ### Added
 
@@ -18,13 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reworked time editing UX in YouGile task details: compact icon-based controls, `HH:MM` duration format, and editing block opened on demand from the time summary in the header.
 - Added optional performance timing logs for YouGile tree/details loading in `Task Chats Debug` (enabled via YouGile debug settings).
-=======
-## [1.2.9] - 2026-05-04
-
-### Changed
-
 - Bumped the extension patch version and rebuilt the Marketplace package.
->>>>>>> e21bb498f8b033f90d75476d10423ec43d830fd1
 
 ## [1.2.8] - 2026-04-30
 

@@ -414,6 +414,22 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
     return this.providerRegistry.getActive();
   }
 
+  /**
+   * Task IDs on each board from the cached YouGile tree snapshot.
+   * The timetracking `commit` API expects board-scoped task id lists similar to the YouGile web client.
+   */
+  async getYouGileTaskIdsForBoard(boardId: string, ensureContainsTaskId: string): Promise<string[]> {
+    const data = await this.getYouGileTreeData();
+    const ids = new Set<string>();
+    ids.add(ensureContainsTaskId);
+    for (const [taskId, bid] of data.boardIdByTaskId.entries()) {
+      if (bid === boardId) {
+        ids.add(taskId);
+      }
+    }
+    return [...ids];
+  }
+
   refresh(): void {
     updateYouGileFilterContext();
     this.yougileTreeData = undefined;
@@ -1554,6 +1570,7 @@ export function registerTaskTreeCommands(
         boardTaskIds = [task.id];
         companyId = readCompanyIdFromTask(task);
         if (boardId) {
+          boardTaskIds = await provider.getYouGileTaskIdsForBoard(boardId, task.id);
           const tBatch = Date.now();
           const timeData = await getYouGileTimeStatsBatch(boardId, boardTaskIds, {
             userId: getYouGileIntegrationOptions().assigneeId,

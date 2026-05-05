@@ -5,6 +5,7 @@ import {
   editYouGileSpentTimeRecord,
   getYouGileTaskById,
   getYouGileTimeStatsBatch,
+  getYouGileExtensionConfig,
   getYouGileIntegrationOptions,
 } from '../integrations/yougileClient';
 import type {
@@ -39,6 +40,42 @@ type EditableTimeRecord = {
   duration: number;
   revision?: string;
 };
+
+/** Webview serializes NaN as null; Number(null) is 0 — read duration without that pitfall. */
+function readPostedDuration(message: Record<string, unknown>): number {
+  const v = message.duration;
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return v;
+  }
+  if (typeof v === 'string') {
+    const trimmed = v.trim();
+    if (!trimmed) {
+      return NaN;
+    }
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+}
+
+function readPostedUserId(message: Record<string, unknown>): string {
+  const v = message.userId;
+  if (typeof v === 'string') {
+    return v.trim();
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') {
+    return String(v).trim();
+  }
+  return '';
+}
+
+function readPostedDate(message: Record<string, unknown>): string {
+  const v = message.date;
+  if (typeof v === 'string') {
+    return v.trim();
+  }
+  return '';
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -387,13 +424,21 @@ export async function openYouGileTaskDetailPanel(options: YouGileTaskDetailPanel
       void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.missingBoard'));
       return;
     }
-    const userId = typeof message.userId === 'string' ? message.userId.trim() : '';
-    const date = typeof message.date === 'string' ? message.date.trim() : '';
-    const duration = typeof message.duration === 'number' ? message.duration : Number(message.duration);
+    const userId = readPostedUserId(message);
+    const date = readPostedDate(message);
+    const duration = readPostedDuration(message);
     try {
       if (type === 'yougile.addTimeRecord') {
-        if (!userId || !date || !Number.isFinite(duration) || duration <= 0) {
-          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
+        if (!userId) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidUser'));
+          return;
+        }
+        if (!date) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidDate'));
+          return;
+        }
+        if (!Number.isFinite(duration) || duration <= 0) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidDuration'));
           return;
         }
         await addYouGileSpentTimeRecord({
@@ -407,8 +452,16 @@ export async function openYouGileTaskDetailPanel(options: YouGileTaskDetailPanel
         });
       } else if (type === 'yougile.editTimeRecord') {
         const recordId = typeof message.recordId === 'string' ? message.recordId.trim() : '';
-        if (!recordId || !userId || !date || !Number.isFinite(duration) || duration <= 0) {
+        if (!recordId || !userId) {
           void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
+          return;
+        }
+        if (!date) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidDate'));
+          return;
+        }
+        if (!Number.isFinite(duration) || duration <= 0) {
+          void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidDuration'));
           return;
         }
         const revision = typeof message.revision === 'string' ? message.revision.trim() : undefined;
@@ -744,6 +797,38 @@ function toInputDateTime(iso?: string): string {
   return local.toISOString().slice(0, 16);
 }
 
+function buildTimeEditUserOptions(
+  task: YouGileTask,
+  usersById: Map<string, YouGileUser>
+): { id: string; label: string }[] {
+  const entries = new Map<string, string>();
+  for (const user of usersById.values()) {
+    entries.set(user.id, user.realName ?? user.name ?? user.email ?? user.id);
+  }
+  const extId = getYouGileExtensionConfig().userId?.trim();
+  if (extId) {
+    entries.set(extId, entries.get(extId) ?? extId);
+  }
+  const filterAssignee = getYouGileIntegrationOptions().assigneeId?.trim();
+  if (filterAssignee) {
+    entries.set(filterAssignee, entries.get(filterAssignee) ?? filterAssignee);
+  }
+  for (const id of task.assigneeIds ?? []) {
+    const trimmed = typeof id === 'string' ? id.trim() : '';
+    if (trimmed) {
+      entries.set(trimmed, entries.get(trimmed) ?? resolveAssigneeLabel(trimmed, usersById));
+    }
+  }
+  const raw = task.raw as Record<string, unknown> | undefined;
+  const createdBy = typeof raw?.createdBy === 'string' ? raw.createdBy.trim() : '';
+  if (createdBy) {
+    entries.set(createdBy, entries.get(createdBy) ?? resolveAssigneeLabel(createdBy, usersById));
+  }
+  return [...entries.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+}
+
 function formatDurationHoursMinutes(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return '00:00';
@@ -781,35 +866,44 @@ function collectEditableRecords(taskTimeStats?: YouGileTaskTimeStats): EditableT
 }
 
 function renderTimeEditSection(
+  task: YouGileTask,
   usersById: Map<string, YouGileUser>,
   taskTimeStats: YouGileTaskTimeStats | undefined,
   boardId: string | undefined
 ): string {
-  const users = Array.from(usersById.values())
-    .map((user) => ({
-      id: user.id,
-      label: user.realName ?? user.name ?? user.email ?? user.id,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const userOptions = buildTimeEditUserOptions(task, usersById);
   const defaultUserId =
-    getYouGileIntegrationOptions().assigneeId ??
-    users[0]?.id ??
+    getYouGileExtensionConfig().userId?.trim() ||
+    getYouGileIntegrationOptions().assigneeId?.trim() ||
+    task.assigneeIds.find((id) => typeof id === 'string' && id.trim())?.trim() ||
+    userOptions[0]?.id ||
     '';
   const records = collectEditableRecords(taskTimeStats);
   const recordRows = records
     .map((record) => {
       const userLabel = resolveAssigneeLabel(record.userId, usersById);
       return `
-        <div class="record-row-edit" data-record-id="${escapeHtml(record.recordId)}">
-          <span class="record-date">${escapeHtml(formatIsoDateTime(record.date))}</span>
-          <span class="record-user">${escapeHtml(userLabel)}</span>
-          <span class="record-duration">${escapeHtml(formatDurationHoursMinutes(record.duration))}</span>
-          <button type="button" class="icon-btn-min" title="${escapeHtml(t('yougile.detail.timeEdit.edit'))}" data-edit-record-id="${escapeHtml(record.recordId)}">✏️</button>
-          <button type="button" class="icon-btn-min danger" title="${escapeHtml(t('yougile.detail.timeEdit.delete'))}" data-delete-record-id="${escapeHtml(record.recordId)}" data-delete-user-id="${escapeHtml(record.userId)}">🗑</button>
+        <div class="record-row-edit" data-record-id="${escapeHtml(record.recordId)}" data-record-user-id="${escapeHtml(record.userId)}">
+          <div class="record-view">
+            <span class="record-date">${escapeHtml(formatIsoDateTime(record.date))}</span>
+            <span class="record-user">${escapeHtml(userLabel)}</span>
+            <span class="record-duration">${escapeHtml(formatDurationHoursMinutes(record.duration))}</span>
+            <button type="button" class="icon-btn-min" title="${escapeHtml(t('yougile.detail.timeEdit.edit'))}" data-action="edit-record" data-record-id="${escapeHtml(record.recordId)}">✏️</button>
+            <button type="button" class="icon-btn-min danger" title="${escapeHtml(t('yougile.detail.timeEdit.delete'))}" data-action="delete-record" data-delete-record-id="${escapeHtml(record.recordId)}" data-delete-user-id="${escapeHtml(record.userId)}">🗑</button>
+          </div>
+          <div class="record-inline-editor" hidden>
+            <input type="datetime-local" class="edit-inline-date" ${boardId ? '' : 'disabled'} />
+            <input type="text" class="edit-inline-duration" placeholder="hh:mm" ${boardId ? '' : 'disabled'} />
+            <button type="button" class="icon-btn-min" data-action="save-inline-record" title="${escapeHtml(t('yougile.detail.timeEdit.saveEdit'))}">💾</button>
+            <button type="button" class="icon-btn-min" data-action="cancel-inline-record" title="${escapeHtml(t('yougile.detail.timeEdit.cancel'))}">✖</button>
+          </div>
         </div>
       `;
     })
     .join('');
+  const recordsBlock = recordRows
+    ? `<div class="records-edit-list" id="yougileRecordsEditList">${recordRows}</div>`
+    : `<div class="records-edit-list empty" id="yougileRecordsEditList"><div class="empty">${escapeHtml(t('yougile.detail.emptyTimeRecords'))}</div></div>`;
   return `
     <section class="card time-edit-card is-collapsed" id="timeEditCard">
       <h2>${escapeHtml(t('yougile.detail.timeEdit.title'))}</h2>
@@ -824,9 +918,10 @@ function renderTimeEditSection(
             <div class="meta-label">${escapeHtml(t('yougile.detail.timeEdit.records'))}</div>
             <button type="button" class="icon-btn-min" id="showAddTimeRowBtn" title="${escapeHtml(t('yougile.detail.timeEdit.add'))}" ${boardId ? '' : 'disabled'}>➕</button>
           </div>
+          ${recordsBlock}
           <div id="addTimeRecordRow" class="time-row-editor" hidden>
             <select id="timeRecordUser" ${boardId ? '' : 'disabled'}>
-              ${users
+              ${userOptions
                 .map(
                   (entry) =>
                     `<option value="${escapeHtml(entry.id)}" ${entry.id === defaultUserId ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`
@@ -838,29 +933,12 @@ function renderTimeEditSection(
             <button type="button" class="icon-btn-min" id="addTimeRecordBtn" title="${escapeHtml(t('yougile.detail.timeEdit.add'))}" ${boardId ? '' : 'disabled'}>✅</button>
             <button type="button" class="icon-btn-min" id="cancelAddTimeRowBtn" title="${escapeHtml(t('yougile.detail.timeEdit.cancel'))}" ${boardId ? '' : 'disabled'}>✖</button>
           </div>
-          ${
-            recordRows
-              ? `<div class="records-edit-list">${recordRows}</div>`
-              : `<div class="empty">${escapeHtml(t('yougile.detail.emptyTimeRecords'))}</div>`
-          }
-          <div id="timeRecordEditPanel" class="time-row-editor" hidden>
-            <select id="editRecordUser" ${boardId ? '' : 'disabled'}>
-              ${users
-                .map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`)
-                .join('')}
-            </select>
-            <input type="datetime-local" id="editRecordDate" ${boardId ? '' : 'disabled'} />
-            <input type="text" id="editRecordDuration" placeholder="hh:mm" ${boardId ? '' : 'disabled'} />
-            <input type="hidden" id="editRecordId" />
-            <input type="hidden" id="editRecordRevision" />
-            <button type="button" class="icon-btn-min" id="saveEditTimeRecordBtn" title="${escapeHtml(t('yougile.detail.timeEdit.saveEdit'))}" ${boardId ? '' : 'disabled'}>💾</button>
-            <button type="button" class="icon-btn-min" id="cancelEditTimeRecordBtn" title="${escapeHtml(t('yougile.detail.timeEdit.cancel'))}" ${boardId ? '' : 'disabled'}>✖</button>
-          </div>
         </div>
       </div>
     </section>
     <script>
       const __timeRecords = ${serializeForScript(records)};
+      const __defaultAddUserId = ${serializeForScript(defaultUserId)};
     </script>
   `;
 }
@@ -1055,11 +1133,15 @@ function buildHtml(
     .time-edit-grid.is-disabled { opacity: .7; pointer-events: none; }
     .time-edit-head { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom:8px; }
     .records-edit-list { display:grid; gap:6px; }
-    .record-row-edit { display:grid; grid-template-columns: 1fr 1fr auto auto auto; gap:8px; align-items:center; padding:6px 0; border-bottom:1px dashed var(--vscode-widget-border, transparent); }
+    .record-row-edit { padding: 6px 0; border-bottom: 1px dashed var(--vscode-widget-border, transparent); }
     .record-row-edit:last-child { border-bottom: 0; }
+    .record-view { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto auto auto; gap:8px; align-items:center; }
+    .record-inline-editor { margin-top: 6px; display: grid; grid-template-columns: minmax(0,1fr) 100px auto auto; gap: 6px; align-items: center; }
+    .record-inline-editor[hidden] { display: none !important; margin-top: 0; }
     .icon-btn-min { border:1px solid var(--vscode-button-border, var(--vscode-widget-border, transparent)); background: transparent; color: var(--vscode-foreground); border-radius:6px; padding:4px 6px; cursor:pointer; font: inherit; line-height: 1; }
     .icon-btn-min.danger { color: var(--vscode-errorForeground); border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, var(--vscode-widget-border, transparent)); }
-    .time-row-editor { margin-top:6px; display:grid; grid-template-columns: 1fr 1fr 110px auto auto; gap:6px; align-items:center; }
+    #addTimeRecordRow.time-row-editor { margin-top: 10px; }
+    .time-row-editor { margin-top:6px; display:grid; grid-template-columns: 1fr minmax(0,1fr) 110px auto auto; gap:6px; align-items:center; }
     .time-row-editor input, .time-row-editor select { width:100%; box-sizing:border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 5px 6px; font: inherit; }
   </style>
 </head>
@@ -1069,7 +1151,7 @@ function buildHtml(
       ${buildMetaRows(task, usersById, columnsById, stickersById, taskTimeStats, liveTimer)}
     </section>
 
-    ${renderTimeEditSection(usersById, taskTimeStats, boardId)}
+    ${renderTimeEditSection(task, usersById, taskTimeStats, boardId)}
 
     <section class="card">
       <h2>${escapeHtml(t('yougile.detail.description'))}</h2>
@@ -1099,17 +1181,16 @@ function buildHtml(
     const addRow = document.getElementById('addTimeRecordRow');
     const addBtn = document.getElementById('addTimeRecordBtn');
     const cancelAddBtn = document.getElementById('cancelAddTimeRowBtn');
-    const saveEditBtn = document.getElementById('saveEditTimeRecordBtn');
+    const recordsListEl = document.getElementById('yougileRecordsEditList');
     const userField = document.getElementById('timeRecordUser');
     const dateField = document.getElementById('timeRecordDate');
     const durationField = document.getElementById('timeRecordDuration');
-    const editPanel = document.getElementById('timeRecordEditPanel');
-    const editUserField = document.getElementById('editRecordUser');
-    const editDateField = document.getElementById('editRecordDate');
-    const editDurationField = document.getElementById('editRecordDuration');
-    const editRecordIdField = document.getElementById('editRecordId');
-    const editRecordRevisionField = document.getElementById('editRecordRevision');
-    const cancelEditBtn = document.getElementById('cancelEditTimeRecordBtn');
+
+    const nowForDatetimeLocal = () => {
+      const date = new Date();
+      const offsetMs = date.getTimezoneOffset() * 60000;
+      return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+    };
 
     const setTimeCardExpanded = (expanded) => {
       if (!timeCard) return;
@@ -1125,10 +1206,16 @@ function buildHtml(
     };
 
     const hmToSeconds = (value) => {
-      const match = /^(\d+):([0-5]\d)$/.exec(String(value || '').trim());
-      if (!match) return NaN;
-      const hours = Number(match[1]);
-      const minutes = Number(match[2]);
+      const trimmed = String(value || '').trim();
+      const colon = trimmed.indexOf(':');
+      if (colon < 1) return NaN;
+      const hPart = trimmed.slice(0, colon).trim();
+      const mPart = trimmed.slice(colon + 1).trim();
+      if (!/^\\d+$/.test(hPart) || !/^\\d{1,2}$/.test(mPart)) return NaN;
+      const hours = Number(hPart);
+      const minutes = Number(mPart);
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return NaN;
+      if (minutes < 0 || minutes > 59) return NaN;
       return (hours * 60 + minutes) * 60;
     };
 
@@ -1138,25 +1225,45 @@ function buildHtml(
       return Number.isNaN(date.getTime()) ? '' : date.toISOString();
     };
 
-    const openEdit = (recordId) => {
-      if (!Array.isArray(__timeRecords)) {
-        return;
-      }
+    const collapseAllInlineEdits = () => {
+      document.querySelectorAll('.record-row-edit').forEach((row) => {
+        const pane = row.querySelector('.record-inline-editor');
+        const view = row.querySelector('.record-view');
+        if (pane) pane.hidden = true;
+        if (view) view.hidden = false;
+      });
+    };
+
+    const startInlineEdit = (row) => {
+      const recordId = row.getAttribute('data-record-id');
+      if (!recordId || !Array.isArray(__timeRecords)) return;
       const record = __timeRecords.find((entry) => entry.recordId === recordId);
-      if (!record) {
-        return;
-      }
-      editUserField.value = record.userId;
+      if (!record) return;
+      collapseAllInlineEdits();
+      if (addRow) addRow.hidden = true;
+      const pane = row.querySelector('.record-inline-editor');
+      const view = row.querySelector('.record-view');
+      const dateEl = row.querySelector('.edit-inline-date');
+      const durEl = row.querySelector('.edit-inline-duration');
       const date = new Date(record.date);
-      if (!Number.isNaN(date.getTime())) {
+      if (dateEl && !Number.isNaN(date.getTime())) {
         const offsetMs = date.getTimezoneOffset() * 60000;
-        editDateField.value = new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+        dateEl.value = new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+      } else if (dateEl) {
+        dateEl.value = '';
       }
-      editDurationField.value = secondsToHm(record.duration);
-      editRecordIdField.value = record.recordId;
-      editRecordRevisionField.value = record.revision || '';
-      editPanel.hidden = false;
+      if (durEl) durEl.value = secondsToHm(record.duration);
+      if (view) view.hidden = true;
+      if (pane) pane.hidden = false;
       setTimeCardExpanded(true);
+      dateEl?.focus();
+    };
+
+    const cancelInlineEdit = (row) => {
+      const pane = row.querySelector('.record-inline-editor');
+      const view = row.querySelector('.record-view');
+      if (pane) pane.hidden = true;
+      if (view) view.hidden = false;
     };
 
     timeToggle?.addEventListener('click', () => {
@@ -1165,29 +1272,58 @@ function buildHtml(
     });
 
     showAddBtn?.addEventListener('click', () => {
+      collapseAllInlineEdits();
+      if (!addRow) return;
       addRow.hidden = false;
-      editPanel.hidden = true;
+      if (userField && typeof __defaultAddUserId === 'string' && __defaultAddUserId.trim()) userField.value = __defaultAddUserId.trim();
+      if (dateField) dateField.value = nowForDatetimeLocal();
+      if (durationField) durationField.value = '01:00';
       setTimeCardExpanded(true);
+      dateField?.focus();
     });
 
     cancelAddBtn?.addEventListener('click', () => {
-      addRow.hidden = true;
+      if (addRow) addRow.hidden = true;
     });
 
-    cancelEditBtn?.addEventListener('click', () => {
-      editPanel.hidden = true;
-    });
-
-    document.querySelectorAll('[data-edit-record-id]').forEach((button) => {
-      button.addEventListener('click', () => openEdit(button.dataset.editRecordId));
-    });
-    document.querySelectorAll('[data-delete-record-id]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const recordId = button.dataset.deleteRecordId;
-        const userId = button.dataset.deleteUserId;
-        if (!recordId || !userId) {
-          return;
-        }
+    recordsListEl?.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
+      if (!btn) return;
+      const action = btn.getAttribute('data-action');
+      const row = btn.closest('.record-row-edit');
+      if (action === 'edit-record') {
+        if (row) startInlineEdit(row);
+        return;
+      }
+      if (action === 'cancel-inline-record') {
+        if (row) cancelInlineEdit(row);
+        return;
+      }
+      if (action === 'save-inline-record') {
+        if (!row) return;
+        const recordId = row.getAttribute('data-record-id');
+        const userId = row.getAttribute('data-record-user-id');
+        if (!recordId || !userId || !Array.isArray(__timeRecords)) return;
+        const record = __timeRecords.find((entry) => entry.recordId === recordId);
+        const dateEl = row.querySelector('.edit-inline-date');
+        const durEl = row.querySelector('.edit-inline-duration');
+        const durationSeconds = hmToSeconds(durEl ? durEl.value : '');
+        vscode.postMessage({
+          type: 'yougile.editTimeRecord',
+          boardId,
+          boardTaskIds,
+          userId,
+          date: parseDateToIso(dateEl ? dateEl.value : ''),
+          duration: durationSeconds,
+          recordId,
+          revision: record && record.revision ? record.revision : undefined,
+        });
+        return;
+      }
+      if (action === 'delete-record') {
+        const recordId = btn.getAttribute('data-delete-record-id');
+        const userId = btn.getAttribute('data-delete-user-id');
+        if (!recordId || !userId) return;
         if (!confirm(${serializeForScript(t('yougile.detail.timeEdit.deleteConfirm'))})) {
           return;
         }
@@ -1198,32 +1334,18 @@ function buildHtml(
           userId,
           recordId,
         });
-      });
+      }
     });
 
     addBtn?.addEventListener('click', () => {
-      const durationSeconds = hmToSeconds(durationField.value);
+      const durationSeconds = hmToSeconds(durationField ? durationField.value : '');
       vscode.postMessage({
         type: 'yougile.addTimeRecord',
         boardId,
         boardTaskIds,
-        userId: userField.value,
-        date: parseDateToIso(dateField.value),
+        userId: userField ? userField.value : '',
+        date: parseDateToIso(dateField ? dateField.value : ''),
         duration: durationSeconds,
-      });
-    });
-
-    saveEditBtn?.addEventListener('click', () => {
-      const durationSeconds = hmToSeconds(editDurationField.value);
-      vscode.postMessage({
-        type: 'yougile.editTimeRecord',
-        boardId,
-        boardTaskIds,
-        userId: editUserField.value,
-        date: parseDateToIso(editDateField.value),
-        duration: durationSeconds,
-        recordId: editRecordIdField.value,
-        revision: editRecordRevisionField.value || undefined,
       });
     });
   </script>
