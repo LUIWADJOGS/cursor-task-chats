@@ -100,6 +100,7 @@ export type TranslationKey =
   | 'taskDetail.metricFiles'
   | 'taskDetail.metricSubtasks'
   | 'taskDetail.metricChecklist'
+  | 'taskDetail.metricChats'
   | 'taskDetail.branchLabel'
   | 'taskDetail.createdAtLabel'
   | 'taskDetail.updatedAtLabel'
@@ -181,6 +182,7 @@ export type TranslationKey =
   | 'messages.yougile.report.invalidRange'
   | 'messages.yougile.report.userMissing'
   | 'commands.openYougileTaskDetails.title'
+  | 'commands.openTaskDetails.title'
   | 'commands.setupYouGileAuth.title'
   | 'commands.openYouGileTimeReport.title'
   | 'commands.startYouGileTimer.title'
@@ -378,6 +380,7 @@ const en: Translations = {
   'taskDetail.metricFiles': 'Changed files',
   'taskDetail.metricSubtasks': 'Subtasks',
   'taskDetail.metricChecklist': 'Checklist',
+  'taskDetail.metricChats': 'Chats',
   'taskDetail.branchLabel': 'Branch',
   'taskDetail.createdAtLabel': 'Created',
   'taskDetail.updatedAtLabel': 'Updated',
@@ -462,7 +465,8 @@ const en: Translations = {
   'messages.yougile.report.invalidRange': 'End date must be greater than or equal to start date.',
   'messages.yougile.report.userMissing':
     'User is not configured for report. Run YouGile setup and select a user.',
-  'commands.openYougileTaskDetails.title': 'Open YouGile Task Details',
+  'commands.openYougileTaskDetails.title': 'Open Task Details',
+  'commands.openTaskDetails.title': 'Open Task Details',
   'commands.setupYouGileAuth.title': 'Setup YouGile Auth',
   'commands.openYouGileTimeReport.title': 'Open YouGile Time Report',
   'commands.startYouGileTimer.title': 'Start YouGile Timer',
@@ -661,6 +665,7 @@ const ru: Translations = {
   'taskDetail.metricFiles': 'Изменённые файлы',
   'taskDetail.metricSubtasks': 'Подзадачи',
   'taskDetail.metricChecklist': 'Чеклист',
+  'taskDetail.metricChats': 'Чаты',
   'taskDetail.branchLabel': 'Ветка',
   'taskDetail.createdAtLabel': 'Создано',
   'taskDetail.updatedAtLabel': 'Обновлено',
@@ -745,7 +750,8 @@ const ru: Translations = {
   'messages.yougile.report.invalidRange': 'Дата окончания должна быть не раньше даты начала.',
   'messages.yougile.report.userMissing':
     'Для отчета не настроен пользователь. Запусти настройку YouGile и выбери пользователя.',
-  'commands.openYougileTaskDetails.title': 'Открыть детали задачи YouGile',
+  'commands.openYougileTaskDetails.title': 'Карточка задачи',
+  'commands.openTaskDetails.title': 'Карточка задачи',
   'commands.setupYouGileAuth.title': 'Настроить авторизацию YouGile',
   'commands.openYouGileTimeReport.title': 'Открыть отчет по времени YouGile',
   'commands.startYouGileTimer.title': 'Запустить таймер YouGile',

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Дерево задач: локальные и задачи YouGile открываются одной и той же командой карточки (`Open Task Details` / контекстное меню и клик по строке), старая команда YouGile остаётся алиасом для совместимости.
+- Карточка локальной задачи: тот же визуальный язык, что у детальной панели YouGile (`task-summary`, карточки-секции, компактные бейджи). Блоки учёта времени YouGile и прочее, чего нет у локальных задач, не показываются. Общие стили вынесены в общий модуль с панелью YouGile.
+
+## [1.3.0] - 2026-05-08
+
+### Fixed
+
+- YouGile task details: time-edit panel stays open after add/edit/delete when it was already expanded (persists per task id in webview `vscode.setState` across `render()`).
+
+## [1.2.13] - 2026-05-08
+
+### Changed
+
+- YouGile task details: the time-edit card (no section title) stays fully hidden until you open it from the summary time control; collapsed state no longer leaves a visible heading strip.
+
+## [1.2.12] - 2026-05-07
+
+### Fixed
+
+- YouGile time details: delete row uses a VS Code modal confirmation instead of webview `window.confirm`, with click handling robust to icon-button text nodes.
+- YouGile time details: `.time-row-editor[hidden]` uses `display: none !important` so the add-time row stays hidden until ➕ (grid layout had overridden HTML `hidden`).
+
 ## [1.2.11] - 2026-05-06
 
 ### Changed

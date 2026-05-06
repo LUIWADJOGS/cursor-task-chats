@@ -24,7 +24,7 @@
   "commands.selectYougileAssigneeFilter.title": "Filter by Assignee",
   "commands.selectYougileProjectFilter.title": "Filter by Project",
   "commands.selectYougileBoardFilter.title": "Filter by Board",
-  "commands.openYougileTaskDetails.title": "Open YouGile Task Details",
+  "commands.openYougileTaskDetails.title": "Open Task Details",
   "commands.startYouGileTimer.title": "Start YouGile Timer",
   "commands.stopYouGileTimer.title": "Stop YouGile Timer",
   "config.group.general.title": "Cursor Task Chats: General",

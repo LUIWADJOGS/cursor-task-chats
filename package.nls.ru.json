@@ -24,7 +24,7 @@
   "commands.selectYougileAssigneeFilter.title": "Фильтр по ответственному",
   "commands.selectYougileProjectFilter.title": "Фильтр по проекту",
   "commands.selectYougileBoardFilter.title": "Фильтр по доске",
-  "commands.openYougileTaskDetails.title": "Открыть детали задачи YouGile",
+  "commands.openYougileTaskDetails.title": "Карточка задачи",
   "commands.startYouGileTimer.title": "Запустить таймер YouGile",
   "commands.stopYouGileTimer.title": "Остановить таймер YouGile",
   "config.group.general.title": "Cursor Task Chats: Общие",

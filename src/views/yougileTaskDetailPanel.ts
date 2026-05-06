@@ -18,6 +18,7 @@ import type {
   YouGileUser,
 } from '../integrations/yougileClient';
 import { t } from '../i18n';
+import { UNIFIED_TASK_CARD_BASE_CSS } from './unified/taskCardCss';
 
 type YouGileTaskDetailPanelOptions = {
   task: YouGileTask;
@@ -482,6 +483,17 @@ export async function openYouGileTaskDetailPanel(options: YouGileTaskDetailPanel
           void vscode.window.showErrorMessage(t('yougile.detail.timeEdit.invalidInput'));
           return;
         }
+        const deleteLabel = t('yougile.detail.timeEdit.delete');
+        const cancelLabel = t('yougile.detail.timeEdit.cancel');
+        const picked = await vscode.window.showWarningMessage(
+          t('yougile.detail.timeEdit.deleteConfirm'),
+          { modal: true },
+          deleteLabel,
+          cancelLabel
+        );
+        if (picked !== deleteLabel) {
+          return;
+        }
         await deleteYouGileSpentTimeRecord({
           boardId,
           taskId: task.id,
@@ -906,7 +918,7 @@ function renderTimeEditSection(
     : `<div class="records-edit-list empty" id="yougileRecordsEditList"><div class="empty">${escapeHtml(t('yougile.detail.emptyTimeRecords'))}</div></div>`;
   return `
     <section class="card time-edit-card is-collapsed" id="timeEditCard">
-      <h2>${escapeHtml(t('yougile.detail.timeEdit.title'))}</h2>
+      <div class="time-edit-panel">
       ${
         boardId
           ? ''
@@ -934,6 +946,7 @@ function renderTimeEditSection(
             <button type="button" class="icon-btn-min" id="cancelAddTimeRowBtn" title="${escapeHtml(t('yougile.detail.timeEdit.cancel'))}" ${boardId ? '' : 'disabled'}>✖</button>
           </div>
         </div>
+      </div>
       </div>
     </section>
     <script>
@@ -1074,75 +1087,7 @@ function buildHtml(
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
   <style>
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 18px; margin: 0; }
-    .layout { display: grid; gap: 14px; max-width: 960px; margin: 0 auto; }
-    .card { background: var(--vscode-sideBar-background); border: 1px solid var(--vscode-widget-border, transparent); border-radius: 10px; padding: 14px; }
-    h1 { margin: 0 0 6px; font-size: 1.3rem; }
-    h2 { margin: 0 0 10px; font-size: 1rem; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-    .meta-item { background: var(--vscode-editorWidget-background, rgba(127,127,127,.08)); border-radius: 8px; padding: 10px; }
-    .meta-label { font-size: .78rem; color: var(--vscode-descriptionForeground); margin-bottom: 4px; text-transform: uppercase; }
-    .meta-value { word-break: break-word; }
-    .task-summary { border: 1px solid color-mix(in srgb, var(--column-color) 55%, transparent); border-left: 6px solid var(--column-color); background: color-mix(in srgb, var(--column-color) 12%, var(--vscode-sideBar-background)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
-    .task-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-    .task-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
-    .created-at { color: var(--vscode-descriptionForeground); white-space: nowrap; font-size: .9rem; flex: 0 0 auto; text-align: right; align-self: center; }
-    .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--status-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 20%, transparent); flex: 0 0 auto; }
-    .task-title-text { font-weight: 700; font-size: 1.12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .task-column-name { color: var(--vscode-descriptionForeground); white-space: nowrap; }
-    .task-summary-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
-    .task-people { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
-    .mini-label { color: var(--vscode-descriptionForeground); font-size: .75rem; text-transform: uppercase; }
-    .slash { color: var(--vscode-descriptionForeground); }
-    .task-time { white-space: nowrap; font-weight: 700; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
-    .task-time:hover { background: var(--vscode-editorWidget-background, rgba(127,127,127,.12)); }
-    .good { color: #2ea043; }
-    .bad { color: #f85149; }
-    .task-extra-line { display: flex; flex-wrap: wrap; gap: 6px; }
-    .extra-pill { background: var(--vscode-editorWidget-background, rgba(127,127,127,.12)); border-radius: 999px; padding: 4px 8px; font-size: .85rem; }
-    .extra-pill.live { color: #2ea043; }
-    .compact-info-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
-    .info-group { background: var(--vscode-editorWidget-background, rgba(127,127,127,.06)); border-radius: 10px; padding: 8px; }
-    .info-group-title { color: var(--vscode-descriptionForeground); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 6px 2px; }
-    .compact-info { display: flex; flex-wrap: wrap; gap: 6px; }
-    .info-badge { --badge-accent: var(--vscode-textLink-foreground); display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid color-mix(in srgb, var(--badge-accent) 45%, transparent); border-left: 3px solid var(--badge-accent); background: color-mix(in srgb, var(--badge-accent) 10%, var(--vscode-editorWidget-background, rgba(127,127,127,.08))); border-radius: 8px; padding: 5px 7px; }
-    .info-icon { color: var(--badge-accent); font-size: .95rem; line-height: 1; }
-    .info-text { min-width: 0; display: grid; gap: 1px; }
-    .info-label { font-size: .62rem; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: .02em; }
-    .info-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; font-size: .9rem; }
-    pre { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--vscode-editorWidget-background, rgba(127,127,127,.08)); border-radius: 8px; padding: 10px; }
-    .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
-    .description-html { background: var(--vscode-editorWidget-background, rgba(127,127,127,.08)); border-radius: 8px; padding: 14px; font-size: 1.02rem; line-height: 1.65; }
-    .description-html :is(p, ul, ol, blockquote) { margin-top: 0; margin-bottom: 12px; }
-    .description-html li { margin: 6px 0; }
-    .description-html :is(h1, h2, h3, h4, h5, h6) { margin-top: 14px; margin-bottom: 10px; line-height: 1.3; }
-    .sticker-head { display: flex; align-items: center; gap: 8px; }
-    .sticker-icon { font-size: 1.15rem; line-height: 1; }
-    .record-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dashed var(--vscode-widget-border, transparent); }
-    .record-row:last-child { border-bottom: 0; }
-    .debug-error { color: var(--vscode-errorForeground); }
-    .checklists { display: grid; gap: 12px; }
-    .checklist-block { background: var(--vscode-editorWidget-background, rgba(127,127,127,.08)); border-radius: 8px; padding: 10px; }
-    .checklist-title { font-weight: 600; margin-bottom: 8px; }
-    .checklist-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
-    .checklist-item { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
-    .checklist-item.done { color: var(--vscode-descriptionForeground); text-decoration: line-through; }
-    .checkbox { color: var(--vscode-textLink-foreground); flex: 0 0 auto; }
-    .time-edit-card.is-collapsed .time-edit-grid { display: none; }
-    .time-edit-grid { display:grid; grid-template-columns: 1fr; gap:10px; }
-    .time-edit-grid.is-disabled { opacity: .7; pointer-events: none; }
-    .time-edit-head { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom:8px; }
-    .records-edit-list { display:grid; gap:6px; }
-    .record-row-edit { padding: 6px 0; border-bottom: 1px dashed var(--vscode-widget-border, transparent); }
-    .record-row-edit:last-child { border-bottom: 0; }
-    .record-view { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto auto auto; gap:8px; align-items:center; }
-    .record-inline-editor { margin-top: 6px; display: grid; grid-template-columns: minmax(0,1fr) 100px auto auto; gap: 6px; align-items: center; }
-    .record-inline-editor[hidden] { display: none !important; margin-top: 0; }
-    .icon-btn-min { border:1px solid var(--vscode-button-border, var(--vscode-widget-border, transparent)); background: transparent; color: var(--vscode-foreground); border-radius:6px; padding:4px 6px; cursor:pointer; font: inherit; line-height: 1; }
-    .icon-btn-min.danger { color: var(--vscode-errorForeground); border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, var(--vscode-widget-border, transparent)); }
-    #addTimeRecordRow.time-row-editor { margin-top: 10px; }
-    .time-row-editor { margin-top:6px; display:grid; grid-template-columns: 1fr minmax(0,1fr) 110px auto auto; gap:6px; align-items:center; }
-    .time-row-editor input, .time-row-editor select { width:100%; box-sizing:border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 5px 6px; font: inherit; }
+    ${UNIFIED_TASK_CARD_BASE_CSS}
   </style>
 </head>
 <body>
@@ -1172,9 +1117,37 @@ function buildHtml(
     ${showDebugPanels ? renderJsonSection(t('yougile.detail.raw'), task.raw, t('yougile.detail.emptyRaw')) : ''}
   </div>
   <script>
-    const vscode = acquireVsCodeApi();
     const boardId = ${serializeForScript(boardId ?? '')};
     const boardTaskIds = ${serializeForScript(boardTaskIds ?? [task.id])};
+    const detailTaskId = ${serializeForScript(task.id)};
+    const vscode = acquireVsCodeApi();
+
+    const readTimeEditExpanded = () => {
+      const state = vscode.getState() || {};
+      const map =
+        typeof state.timeEditExpandedByTaskId === 'object' &&
+        state.timeEditExpandedByTaskId !== null &&
+        !Array.isArray(state.timeEditExpandedByTaskId)
+          ? (state.timeEditExpandedByTaskId)
+          : {};
+      const id = typeof detailTaskId === 'string' ? detailTaskId : '';
+      return id ? Boolean(map[id]) : false;
+    };
+
+    const writeTimeEditExpanded = (expanded) => {
+      const id = typeof detailTaskId === 'string' ? detailTaskId : '';
+      if (!id) return;
+      const state = vscode.getState() || {};
+      const prevMap =
+        typeof state.timeEditExpandedByTaskId === 'object' &&
+        state.timeEditExpandedByTaskId !== null &&
+        !Array.isArray(state.timeEditExpandedByTaskId)
+          ? ({ ...state.timeEditExpandedByTaskId })
+          : {};
+      prevMap[id] = expanded;
+      vscode.setState({ ...state, timeEditExpandedByTaskId: prevMap });
+    };
+
     const timeCard = document.getElementById('timeEditCard');
     const timeToggle = document.getElementById('timeSummaryToggle');
     const showAddBtn = document.getElementById('showAddTimeRowBtn');
@@ -1195,7 +1168,11 @@ function buildHtml(
     const setTimeCardExpanded = (expanded) => {
       if (!timeCard) return;
       timeCard.classList.toggle('is-collapsed', !expanded);
+      writeTimeEditExpanded(expanded);
     };
+
+    // After add/edit/delete the panel HTML is recreated; reopen time block if it was expanded for this task.
+    setTimeCardExpanded(readTimeEditExpanded());
 
     const secondsToHm = (seconds) => {
       if (!Number.isFinite(seconds) || seconds <= 0) return '00:00';
@@ -1287,7 +1264,11 @@ function buildHtml(
     });
 
     recordsListEl?.addEventListener('click', (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
+      let node = e.target;
+      if (!(node instanceof Element)) {
+        node = node.parentElement;
+      }
+      const btn = node && node.closest ? node.closest('button[data-action]') : null;
       if (!btn) return;
       const action = btn.getAttribute('data-action');
       const row = btn.closest('.record-row-edit');
@@ -1324,9 +1305,6 @@ function buildHtml(
         const recordId = btn.getAttribute('data-delete-record-id');
         const userId = btn.getAttribute('data-delete-user-id');
         if (!recordId || !userId) return;
-        if (!confirm(${serializeForScript(t('yougile.detail.timeEdit.deleteConfirm'))})) {
-          return;
-        }
         vscode.postMessage({
           type: 'yougile.deleteTimeRecord',
           boardId,

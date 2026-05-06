@@ -143,6 +143,11 @@ export class TaskTreeItem extends vscode.TreeItem implements UnifiedTaskNode {
       }
     }
     this.tooltip = tooltip;
+    this.command = {
+      command: 'cursorTaskChats.openTaskDetails',
+      title: t('commands.openTaskDetails.title'),
+      arguments: [this],
+    };
   }
 }
 
@@ -249,8 +254,8 @@ export class YouGileTaskTreeItem extends vscode.TreeItem implements UnifiedTaskN
       ? new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'))
       : new vscode.ThemeIcon(this.isSubtask ? 'list-tree' : 'checklist');
     this.command = {
-      command: 'cursorTaskChats.openYouGileTaskDetails',
-      title: t('commands.openYougileTaskDetails.title'),
+      command: 'cursorTaskChats.openTaskDetails',
+      title: t('commands.openTaskDetails.title'),
       arguments: [this],
     };
     const tooltip = new vscode.MarkdownString();
@@ -1532,11 +1537,11 @@ export function registerTaskTreeCommands(
     })
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand('cursorTaskChats.openYouGileTaskDetails', async (item?: YouGileTaskTreeItem) => {
-      if (!item) {
-        return;
-      }
+  const openUnifiedTaskDetails = async (item?: TaskTreeItem | YouGileTaskTreeItem): Promise<void> => {
+    if (!item) {
+      return;
+    }
+    if (item instanceof YouGileTaskTreeItem) {
       const tOpenDetails = Date.now();
       let task = item.task;
       let users: YouGileUser[] = [];
@@ -1588,7 +1593,6 @@ export function registerTaskTreeCommands(
           };
         }
       } catch (error) {
-        // Detail panel can still be rendered with partial tree data.
         timeDebug = {
           skipped: true,
           reason: 'Failed to load task details data',
@@ -1610,19 +1614,21 @@ export function registerTaskTreeCommands(
         companyId,
         onUpdated: () => provider.refresh(),
       });
-    })
-  );
+      return;
+    }
+    const folder = getFolder();
+    if (!folder) {
+      return;
+    }
+    const repo = await openTaskRepository(context, folder);
+    await openTaskDetailPanel(context, folder, repo, () => provider.refresh(), item.task);
+  };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('cursorTaskChats.openTaskDetails', async (item?: TaskTreeItem) => {
-      const folder = getFolder();
-      if (!folder || !item) {
-        return;
-      }
-      const repo = await openTaskRepository(context, folder);
-      await openTaskDetailPanel(context, folder, repo, () => provider.refresh(), item.task);
-    })
+    vscode.commands.registerCommand('cursorTaskChats.openYouGileTaskDetails', openUnifiedTaskDetails)
   );
+
+  context.subscriptions.push(vscode.commands.registerCommand('cursorTaskChats.openTaskDetails', openUnifiedTaskDetails));
 
   context.subscriptions.push(
     vscode.commands.registerCommand('cursorTaskChats.openChat', async (item: TaskChatTreeItem) => {

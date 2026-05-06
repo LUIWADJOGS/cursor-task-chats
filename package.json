@@ -2,7 +2,7 @@
   "name": "cursor-task-chats",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.2.11",
+  "version": "1.3.0",
   "publisher": "LUIWADJOGS",
   "license": "MIT",
   "repository": {
@@ -349,12 +349,12 @@
           "when": "view == taskChats.taskChatsView && (viewItem == yougileTask || viewItem == yougileTaskLiveTimer)"
         },
         {
-          "command": "cursorTaskChats.openYouGileTaskDetails",
+          "command": "cursorTaskChats.openTaskDetails",
           "when": "view == taskChats.taskChatsView && (viewItem == yougileTask || viewItem == yougileTaskLiveTimer)",
           "group": "inline"
         },
         {
-          "command": "cursorTaskChats.openYouGileTaskDetails",
+          "command": "cursorTaskChats.openTaskDetails",
           "when": "view == taskChats.taskChatsView && (viewItem == yougileTask || viewItem == yougileTaskLiveTimer)"
         },
         {
