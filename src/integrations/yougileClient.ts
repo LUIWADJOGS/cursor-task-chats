@@ -29,6 +29,8 @@ export interface YouGileColumn {
   id: string;
   title: string;
   boardId?: string;
+  /** Order hint from column payload (order / index / …); lower = left in board. */
+  listOrder: number;
   raw: Record<string, unknown>;
 }
 
@@ -287,6 +289,94 @@ function parseTask(rawTask: unknown, orderIndex = Number.MAX_SAFE_INTEGER): YouG
   };
 }
 
+function readColumnListOrder(raw: Record<string, unknown>): number {
+  const keys = ['order', 'orderIndex', 'index', 'position', 'sortOrder', 'number', 'ordinal'] as const;
+  for (const key of keys) {
+    const n = asNumber(raw[key]);
+    if (n !== undefined) {
+      return n;
+    }
+    const s = asString(raw[key]);
+    if (s && /^-?\d+$/.test(s)) {
+      return Number(s);
+    }
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function coerceIdArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  if (value.every((x): x is string => typeof x === 'string')) {
+    return value;
+  }
+  const ids = value
+    .map((x) => {
+      if (typeof x === 'string') {
+        return x;
+      }
+      const r = asRecord(x);
+      return r ? asString(r.id) ?? asString(r.columnId) : undefined;
+    })
+    .filter((x): x is string => Boolean(x));
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** Column ids in board order when the API exposes them on the board object (not always in OpenAPI). */
+function readOrderedColumnIdsFromBoardRaw(raw: Record<string, unknown>): string[] | undefined {
+  const keys = ['columnIds', 'columnsOrder', 'orderedColumnIds', 'columnOrder', 'columns'] as const;
+  for (const key of keys) {
+    const got = coerceIdArray(raw[key]);
+    if (got) {
+      return got;
+    }
+  }
+  const data = asRecord(raw.data);
+  if (data) {
+    for (const key of keys) {
+      const got = coerceIdArray(data[key]);
+      if (got) {
+        return got;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Sort columns the same way as on a YouGile board: prefer explicit id order on the board, then numeric order fields on columns.
+ */
+export function sortYouGileBoardColumns(columns: YouGileColumn[], board?: YouGileBoard): YouGileColumn[] {
+  if (columns.length <= 1) {
+    return columns;
+  }
+  const orderFromBoard = board ? readOrderedColumnIdsFromBoardRaw(board.raw) : undefined;
+  const indexById = orderFromBoard ? new Map(orderFromBoard.map((id, i) => [id, i])) : undefined;
+  const inputIndex = new Map(columns.map((c, i) => [c.id, i]));
+  return [...columns].sort((a, b) => {
+    if (a.id === NO_COLUMN_GROUP_ID) {
+      return 1;
+    }
+    if (b.id === NO_COLUMN_GROUP_ID) {
+      return -1;
+    }
+    if (indexById) {
+      const ia = indexById.has(a.id) ? (indexById.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+      const ib = indexById.has(b.id) ? (indexById.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+      if (ia !== ib) {
+        return ia - ib;
+      }
+    }
+    const oa = a.listOrder;
+    const ob = b.listOrder;
+    if (oa !== ob) {
+      return oa - ob;
+    }
+    return (inputIndex.get(a.id) ?? 0) - (inputIndex.get(b.id) ?? 0);
+  });
+}
+
 function parseColumn(rawColumn: unknown): YouGileColumn | null {
   const raw = asRecord(rawColumn);
   if (!raw) {
@@ -301,7 +391,7 @@ function parseColumn(rawColumn: unknown): YouGileColumn | null {
   const title = asString(raw.title) ?? asString(raw.name) ?? id;
   const boardByObject = asRecord(raw.board)?.id;
   const boardId = asString(raw.boardId) ?? asString(boardByObject);
-  return { id, title, boardId, raw };
+  return { id, title, boardId, listOrder: readColumnListOrder(raw), raw };
 }
 
 function parseBoard(rawBoard: unknown): YouGileBoard | null {
@@ -796,7 +886,12 @@ function addSyntheticNoColumn(columns: YouGileColumn[], tasks: YouGileTask[]): Y
   }
   return [
     ...columns,
-    { id: NO_COLUMN_GROUP_ID, title: t('yougile.column.noColumn'), raw: {} },
+    {
+      id: NO_COLUMN_GROUP_ID,
+      title: t('yougile.column.noColumn'),
+      listOrder: Number.MAX_SAFE_INTEGER,
+      raw: {},
+    },
   ];
 }
 

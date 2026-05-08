@@ -38,6 +38,7 @@ import {
   setYouGileBoardFilter,
   setYouGileAssigneeFilter,
   setYouGileProjectFilter,
+  sortYouGileBoardColumns,
   startYouGileLiveTimer,
   stopYouGileLiveTimer,
   type YouGileBoard,
@@ -806,6 +807,11 @@ export class TaskChatsProvider implements vscode.TreeDataProvider<TaskTreeNode> 
         const bucket = columnsByBoardId.get(column.boardId) ?? [];
         bucket.push(column);
         columnsByBoardId.set(column.boardId, bucket);
+      }
+
+      const boardById = new Map(source.boards.map((b) => [b.id, b]));
+      for (const [boardId, cols] of columnsByBoardId.entries()) {
+        columnsByBoardId.set(boardId, sortYouGileBoardColumns(cols, boardById.get(boardId)));
       }
 
       for (const task of tasks) {
