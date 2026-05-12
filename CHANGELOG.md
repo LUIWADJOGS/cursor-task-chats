@@ -7,28 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-05-12
+
+### Changed
+
+- README: Russian-language project overview; feature list highlights YouGile integration and points to the changelog and architecture doc.
+- AGENTS.md: documented language conventions for `docs/`, `CHANGELOG.md`, and publication-facing strings.
+
 ## [1.3.1] - 2026-05-08
 
 ### Fixed
 
-- YouGile: колонки в дереве задач на доске выстраиваются в том же порядке, что и в интерфейсе YouGile (порядок колонок на доске из API и числовые поля порядка у колонок).
+- YouGile: board columns in the task tree match the order shown in the YouGile UI (column order from the API and numeric column order fields).
 
 ### Changed
 
-- Дерево задач: локальные и задачи YouGile открываются одной и той же командой карточки (`Open Task Details` / контекстное меню и клик по строке), старая команда YouGile остаётся алиасом для совместимости.
-- Карточка локальной задачи: тот же визуальный язык, что у детальной панели YouGile (`task-summary`, карточки-секции, компактные бейджи). Блоки учёта времени YouGile и прочее, чего нет у локальных задач, не показываются. Общие стили вынесены в общий модуль с панелью YouGile.
+- YouGile: column sorting when building the tree is aligned with column order in YouGile.
 
 ## [1.3.0] - 2026-05-08
 
+### Changed
+
+- Task tree: local and YouGile tasks open with the same task card command (`Open Task Details` / context menu and row click); the legacy YouGile command remains an alias.
+- Local task card: same visual language as the YouGile detail panel (`task-summary`, section cards, compact badges). YouGile time-tracking blocks and other data not present on local tasks are hidden. Shared styles live in a common module with the YouGile panel.
+- Task card (local / YouGile): extra summary metrics, including linked chat count.
+
 ### Fixed
 
-- YouGile task details: time-edit panel stays open after add/edit/delete when it was already expanded (persists per task id in webview `vscode.setState` across `render()`).
+- YouGile task details: the time-edit panel stays expanded after add/edit/delete when the user had already opened it (state persisted per task id in the webview via `vscode.setState` across `render()` calls).
 
 ## [1.2.13] - 2026-05-08
 
 ### Changed
 
-- YouGile task details: the time-edit card (no section title) stays fully hidden until you open it from the summary time control; collapsed state no longer leaves a visible heading strip.
+- YouGile task details: the time-edit card (no section title) stays fully hidden until opened from the header time summary; collapsed state no longer leaves a visible heading strip.
 
 ## [1.2.12] - 2026-05-07
 
@@ -57,30 +69,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added deleting spent-time records from the YouGile task details card.
+- Deleting spent-time records from the YouGile task details card.
 
 ### Changed
 
 - Reworked time editing UX in YouGile task details: compact icon-based controls, `HH:MM` duration format, and editing block opened on demand from the time summary in the header.
-- Added optional performance timing logs for YouGile tree/details loading in `Task Chats Debug` (enabled via YouGile debug settings).
+- Optional performance timing logs for YouGile tree/details loading in `Task Chats Debug` (enabled via YouGile debug settings).
 - Bumped the extension patch version and rebuilt the Marketplace package.
 
 ## [1.2.8] - 2026-04-30
 
 ### Added
 
-- Added time record management in the YouGile task details card: create new spent-time records and edit existing ones from the extension UI.
+- Time record management in the YouGile task details card: create new spent-time records and edit existing ones from the extension UI.
 
 ### Changed
 
-- Updated YouGile task details panel to refresh actual time stats after add/edit operations and send `timetracking` commit actions through the extension API layer.
+- YouGile task details panel refreshes actual time stats after add/edit operations and sends `timetracking` commit actions through the extension API layer.
 
 ## [1.2.7] - 2026-04-29
 
 ### Added
 
-- Added a unified task provider layer with shared task models, provider registry, and adapter contract for future YouTrack/Bitrix24 integrations.
-- Added generic `provider_task_links` storage with migration from existing YouGile task links.
+- Unified task provider layer with shared task models, provider registry, and adapter contract for future YouTrack/Bitrix24 integrations.
+- Generic `provider_task_links` storage with migration from existing YouGile task links.
 
 ### Changed
 
@@ -127,11 +139,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added a YouGile integration setup flow that discovers companies, gets or creates an API key, and stores required time tracking settings.
-- Added YouGile time tracking support in task cards and tree items, including active timer highlighting, start/stop timer actions, and daily tracked-time summaries.
-- Added a YouGile time report webview with week/custom period selection, per-user selection, daily totals, and overall totals.
-- Added compact YouGile task detail cards with grouped visual badges for status, people, dates, stickers, deadlines, and time tracking.
-- Added readable checklist rendering with checkbox-style completed and incomplete items.
+- YouGile integration setup flow that discovers companies, gets or creates an API key, and stores required time tracking settings.
+- YouGile time tracking support in task cards and tree items, including active timer highlighting, start/stop timer actions, and daily tracked-time summaries.
+- YouGile time report webview with week/custom period selection, per-user selection, daily totals, and overall totals.
+- Compact YouGile task detail cards with grouped visual badges for status, people, dates, stickers, deadlines, and time tracking.
+- Readable checklist rendering with checkbox-style completed and incomplete items.
 
 ### Changed
 

@@ -7,7 +7,7 @@
 - Do not create git commits unless the user explicitly asks.
 - Do not revert unrelated local changes. This workspace is often edited iteratively by the user.
 - Store all planning and documentation files in `docs/`. Keep implementation plans in `docs/plans/` and general documentation in `docs/`.
-- Keep all files under `docs/` in Russian.
+- **Language:** all prose under `docs/` (including plans) must be **Russian**; code identifiers, command ids, and file paths may stay as in the repo. **`CHANGELOG.md` is English** (Keep a Changelog). **Publication-facing** text stays **English** where applicable: `MARKETPLACE_ASSETS.md`, default UI strings in `package.nls.json`, and the changelog. Root `README.md` may be Russian or English per project choice. Other `package.nls.*.json` files follow their locale.
 
 ## Extension Notes
 

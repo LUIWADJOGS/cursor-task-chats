@@ -1,75 +1,80 @@
 # Cursor Task Chats
 
-Organize **tasks** on your current git branch, link **multiple Cursor Composer chats** to each task, and open **task-aware prompts** that include branch context, subtask status, and git progress since a **baseline commit**.
+Организуйте **задачи** на текущей ветке git, привязывайте к каждой **несколько чатов Cursor Composer** и открывайте **промпты с контекстом задачи**: ветка, подзадачи и прогресс git с момента **базового коммита**.
 
-## Why use it
+## Зачем это нужно
 
-Cursor keeps one long list of chats. Branches alone are not enough when one branch carries several features or refactors. This extension adds a **task layer**: each task has a baseline commit, optional subtasks, and one or more chats so you can reopen the right session and see **how much code moved** since the task started.
+В Cursor чаты идут одним длинным списком. Одной ветки мало, если на ней несколько фич или рефакторингов. Расширение добавляет **слой задач**: у каждой задачи есть базовый коммит, опциональные подзадачи и один или несколько чатов — можно вернуться к нужной сессии и увидеть, **сколько кода изменилось** с начала задачи.
 
-## Features
+## Возможности
 
-- **Create task** on the current branch with title, optional description, and baseline `HEAD`
-- **Subtasks** (nested tasks under a parent)
-- **Multiple chats per task** (new prompt session or attach the active chat)
-- **Tree**: current branch → root tasks → subtasks and chats
-- **Progress**: commit count and changed files since the task baseline (shown in tooltips and used in prompts)
-- **Diff panels**: changes since task baseline; optional “all branch changes vs base” (`main` / `master` / `develop`)
-- **Copy** stored chat prompt or a freshly built **task prompt**
-- **SQLite** database under the workspace (default `.cursor/task-chats/tasks.sqlite`): tasks, chats, **checklist**, **file attachments** (paths only)
-- **Task details** webview: edit title, description, status; manage checklist; attach workspace files; open attached paths
-- One-time **import** from legacy `globalState` JSON (older 1.0.x builds) into SQLite when the DB file is first created
-- English and Russian UI (same as VS Code / Cursor UI language)
+- **Создание задачи** на текущей ветке: заголовок, описание, базовый `HEAD`
+- **Подзадачи** (вложенные под родителем)
+- **Несколько чатов на задачу** (новый промпт или привязка активного чата)
+- **Дерево**: текущая ветка → корневые задачи → подзадачи и чаты
+- **Прогресс**: число коммитов и список изменённых файлов с базы задачи (подсказки и промпты)
+- **Панели diff**: изменения с базы задачи; опционально «все изменения ветки относительно базы» (`main` / `master` / `develop`)
+- **Копирование** сохранённого промпта чата или свежего **промпта задачи**
+- **SQLite** в каталоге воркспейса (по умолчанию `.cursor/task-chats/tasks.sqlite`): задачи, чаты, **чеклист**, **вложения** (только пути)
+- **Карточка задачи** (веб-панель): заголовок, описание, статус; чеклист; вложения из воркспейса; открытие путей
+- Разовый **импорт** из устаревшего JSON в `globalState` (сборки 1.0.x) в SQLite при первом создании файла БД
+- Интеграция **YouGile** (при выборе источника в настройках): дерево доски, детали задачи, учёт времени, отчёты, таймер — см. `CHANGELOG.md` и `docs/current-architecture.md`
+- Интерфейс на языке VS Code / Cursor (английский или русский)
 
-## Data and privacy
+## Данные и конфиденциальность
 
-- The DB file lives **on disk** inside your workspace (path configurable via **Settings → Cursor Task Chats → database relative path**). Add it to `.gitignore` or commit it, depending on whether you want to share tasks with the team.
-- **Attachments** are stored as **relative paths**; files are not copied.
+- Файл БД лежит **на диске** в воркспейсе (путь задаётся в **Параметры → Cursor Task Chats → database relative path**). Добавьте его в `.gitignore` или коммитьте — в зависимости от того, нужно ли делиться задачами с командой.
+- **Вложения** хранятся как **относительные пути**; сами файлы не копируются.
 
-## How to use
+## Как пользоваться
 
-1. Open a **git** workspace (single-root folder).
-2. Open **Task Chats** in the Activity Bar.
-3. Use **Create Task** (toolbar): enter title and optional description → a new Cursor chat opens with a generated prompt → the chat is linked to the task.
-4. Add **subtasks** from the toolbar or task context menu; open **Open Task Chat** for another session on the same task.
-5. Use **Attach Current Chat To Task** to bind the focused Composer tab to a picked task.
-6. Switch git branches: the tree lists tasks for the **current** branch only.
+1. Откройте **git**-воркспейс (одна корневая папка).
+2. Откройте представление **Task Chats** на панели активности.
+3. **Create Task** (панель инструментов): заголовок и описание → открывается новый чат Cursor с сгенерированным промптом → чат привязывается к задаче.
+4. Добавляйте **подзадачи** с панели или контекстного меню задачи; **Open Task Chat** — ещё одна сессия на ту же задачу.
+5. **Attach Current Chat To Task** — привязать фокусный чат Composer к выбранной задаче.
+6. Смена ветки git: в дереве показываются задачи только для **текущей** ветки.
 
-## Commands
+## Команды
 
-| Command | Description |
+| Команда | Описание |
 |--------|-------------|
-| Create Task | New task + new Cursor chat with task prompt |
-| Create Subtask | New child task (pick parent if not from tree) + new chat |
-| Open Task Chat (new prompt) | New Composer chat for the selected task |
-| Attach Current Chat To Task | Link focused/open chat to a task |
-| Show Task Chats For Current Branch | Quick Pick of all task chats on this branch |
-| Open Task Details | Webview: description, checklist, attachments |
-| Rename Task / Change Task Status / Change Task Branch / Archive Task | Task management |
-| Open in Cursor Chat / Copy prompts / Show diffs / Rename chat / Remove chat | Per-chat actions |
+| Create Task | Новая задача + новый чат Cursor с промптом задачи |
+| Create Subtask | Дочерняя задача (выбор родителя, если не из дерева) + новый чат |
+| Open Task Chat (new prompt) | Новый чат Composer для выбранной задачи |
+| Attach Current Chat To Task | Привязать открытый/фокусный чат к задаче |
+| Show Task Chats For Current Branch | Быстрый список всех чатов задач на ветке |
+| Open Task Details | Веб-панель: описание, чеклист, вложения |
+| Rename Task / Change Task Status / Change Task Branch / Archive Task | Управление задачей |
+| Open in Cursor Chat / копирование промптов / diff / переименование чата / удаление чата | Действия с чатом |
 
-## Requirements
+## Требования
 
-- **Cursor** (primary target). Reopening chats uses `composer.openComposer` when available.
-- **Git** repo; current branch from workspace root.
-- **Python 3** on `PATH` is used to read Cursor’s workspace `state.vscdb` (same approach as related extensions) for Composer metadata.
+- **Cursor** (основная целевая среда). Повторное открытие чатов: внутренняя команда `composer.openComposer`, если доступна.
+- Репозиторий **Git**; текущая ветка от корня воркспейса.
+- **Python 3** в `PATH` для чтения `state.vscdb` воркспейса Cursor (как у родственных расширений) для метаданных Composer.
 
-## Install from source
+## Сборка из исходников
 
 ```bash
 npm install
 npm run compile
 ```
 
-Then **Run Extension** from this folder in VS Code/Cursor, or package a `.vsix` with `vsce package` if you use the VSCE CLI.
+Далее **Run Extension** из этой папки в VS Code/Cursor или сборка `.vsix` через `npx @vscode/vsce package`.
 
-## Tests
+## Тесты
 
 ```bash
 npm test
 ```
 
-Runs a small **Node test** suite (e.g. prompt truncation for Cursor deeplink limits).
+Запускается небольшой набор **Node**-тестов (например, усечение промпта под лимиты deeplink Cursor).
 
-## License
+## Лицензия
 
-MIT. See [LICENSE](LICENSE).
+MIT. См. [LICENSE](LICENSE).
+
+## Документация
+
+Подробности по архитектуре и планам — в каталоге [docs/](docs/README.md) (на русском). История возможностей и идеи по продвижению — [docs/history-and-promotion.md](docs/history-and-promotion.md).
